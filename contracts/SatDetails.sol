@@ -7,6 +7,9 @@ import "./Median.sol";
 contract SatDetails {
     uint24[] satIds;
     mapping(uint24 => bool) satIdSubmitted;
+
+    address[] observers;
+    mapping(address => bool) observerExists;
     /*
      * Structure preserving the final information of the satellite
      */
@@ -32,19 +35,17 @@ contract SatDetails {
     // Maps satellite to occurences
     mapping(uint24 => satOccurences) satOccurenceMapping;
 
-    // Structure to store score values
-    struct reputationStruct {
-        uint8[] scores;
-        mapping(uint24 => uint8) scoreIndex;
-        mapping(uint24 => bool) satIdScoreExist;
+    // Map address to the satellite it has submitted
+    mapping(address => uint24[]) satSubmittedMapping;
+
+    // Structure to store trust scores
+    struct trustScoreStruct {
+        mapping(uint24 => uint8) sat2trustMapping;
+        uint8 reputation;
     }
 
-    // Map address to trust and reputation scores
-    mapping(address => uint8) reputationMapping;
-    mapping(address => reputationStruct) scoresMapping;
-
-    // Events
-    event trustScoreComputed(uint24 satId, uint8[] iteration);
+    // Mapping from address to trust scores
+    mapping(address => trustScoreStruct) trustMapping;
 
     function submitSatDetails(
         uint24 _satId,
@@ -57,9 +58,16 @@ contract SatDetails {
         satOccurenceMapping[_satId].perigeeOcc.push(_perigee);
         satOccurenceMapping[_satId].observer.push(msg.sender);
 
+        satSubmittedMapping[msg.sender].push(_satId);
+
         if (satIdSubmitted[_satId] == false) {
             satIdSubmitted[_satId] == true;
             satIds.push(_satId);
+        }
+
+        if (observerExists[msg.sender] == false) {
+            observerExists[msg.sender] = true;
+            observers.push(msg.sender);
         }
 
         if (satOccurenceMapping[_satId].observer.length >= 3) {
@@ -84,96 +92,78 @@ contract SatDetails {
 
     // Compute the trust and reputation scores
     function computeTrustScores(uint24 _satId) internal {
-        uint8 trustScore = 50;
-        uint8 satIndex;
-        uint8 totalError;
+        uint256 trustScore;
+        uint256 totalError;
         address obs;
-        uint8[] memory iterations = new uint8[](
+        address[] memory observers = new address[](
             satOccurenceMapping[_satId].observer.length
         );
-
         for (
             uint8 i = 0;
             i < satOccurenceMapping[_satId].observer.length;
             i++
         ) {
             totalError = computeOrbitError(_satId, i);
-            iterations[i] = i;
 
-            //trustScore = totalError > 100 ? 0 : 100 - totalError;
-            trustScore = i;
+            trustScore = totalError > 1000 ? 0 : (1000 - totalError) / 10;
 
             obs = satOccurenceMapping[_satId].observer[i];
+            observers[i] = obs;
 
-            scoresMapping[obs].scores.push(trustScore);
-
-            // if (scoresMapping[obs].satIdScoreExist[_satId] == false) {
-            //     scoresMapping[obs].scores.push(trustScore);
-            //     satIndex = uint8(scoresMapping[obs].scores.length - 1);
-            //     scoresMapping[obs].scoreIndex[_satId] = satIndex;
-            //     scoresMapping[obs].satIdScoreExist[_satId] = true;
-            // } else {
-            //     scoresMapping[obs].scores[
-            //         scoresMapping[obs].scoreIndex[_satId]
-            //     ] = trustScore;
-            // }
+            trustMapping[obs].sat2trustMapping[_satId] = uint8(trustScore);
         }
-        emit trustScoreComputed(_satId, iterations);
     }
 
     // This function computes the error between orbits
     function computeOrbitError(uint24 _satId, uint8 _i)
         internal
         view
-        returns (uint8)
+        returns (uint256)
     {
-        int32 consensusInclination = int32(
-            satDetailsMapping[_satId].inclination
-        );
-        int32 consensusApogee = int32(satDetailsMapping[_satId].apogee);
-        int32 consensusPerigee = int32(satDetailsMapping[_satId].perigee);
+        uint256 consensusInclination = satDetailsMapping[_satId].inclination;
+        uint256 consensusApogee = satDetailsMapping[_satId].apogee;
+        uint256 consensusPerigee = satDetailsMapping[_satId].perigee;
 
-        int32 inclination = int32(
-            satOccurenceMapping[_satId].inclinationOcc[_i]
-        );
-        int32 apogee = int32(satOccurenceMapping[_satId].apogeeOcc[_i]);
-        int32 perigee = int32(satOccurenceMapping[_satId].perigeeOcc[_i]);
+        uint256 inclination = satOccurenceMapping[_satId].inclinationOcc[_i];
+        uint256 apogee = satOccurenceMapping[_satId].apogeeOcc[_i];
+        uint256 perigee = satOccurenceMapping[_satId].perigeeOcc[_i];
 
-        int32 inclinationError = ((inclination - consensusInclination) * 100) /
-            consensusInclination;
-        inclinationError = inclinationError < 0
-            ? -inclinationError
-            : inclinationError;
+        uint256 inclinationError = inclination < consensusInclination
+            ? (consensusInclination - inclination)**2
+            : (inclination - consensusInclination)**2;
 
-        int32 apogeeError = ((apogee - consensusApogee) * 100) /
-            consensusApogee;
-        apogeeError = apogeeError < 0 ? -apogeeError : apogeeError;
+        uint256 apogeeError = apogee < consensusApogee
+            ? (consensusApogee - apogee)**2
+            : (apogee - consensusApogee)**2;
 
-        int32 perigeeError = ((perigee - consensusPerigee) * 100) /
-            consensusPerigee;
-        perigeeError = perigeeError < 0 ? -perigeeError : perigeeError;
+        uint256 perigeeError = perigee < consensusPerigee
+            ? (consensusPerigee - perigee)**2
+            : (perigee - consensusPerigee)**2;
 
-        return uint8(uint32(inclinationError + apogeeError + perigeeError));
+        uint256 totalError = (inclinationError + apogeeError + perigeeError) /
+            3;
+        return sqrt(totalError);
     }
 
     // Computes the reputation of an observer
     function computeReputation() internal {
-        uint8 reputation;
-        uint16 totalReputation;
         uint16 scores;
-        for (uint8 i = 0; i < satIds.length; i++) {
-            if (scoresMapping[msg.sender].satIdScoreExist[satIds[i]]) {
-                reputation = scoresMapping[msg.sender].scores[
-                    scoresMapping[msg.sender].scoreIndex[satIds[i]]
+        address obs;
+
+        for (uint8 i = 0; i < observers.length; i++) {
+            obs = observers[i];
+            scores = 0;
+
+            for (uint8 j = 0; j < satSubmittedMapping[obs].length; j++) {
+                scores += trustMapping[obs].sat2trustMapping[
+                    satSubmittedMapping[obs][j]
                 ];
-                scores += 1;
-                totalReputation += reputation;
             }
+
+            trustMapping[obs].reputation = uint8(
+                scores / satSubmittedMapping[obs].length
+            );
         }
-
-        //reputation = uint8(totalReputation / scores);
-
-        reputationMapping[msg.sender] = 0;
     }
 
     /*
@@ -220,7 +210,30 @@ contract SatDetails {
         view
         returns (uint8[] memory scores, uint8 reputation)
     {
-        scores = scoresMapping[msg.sender].scores;
-        reputation = reputationMapping[msg.sender];
+        scores = new uint8[](satSubmittedMapping[msg.sender].length);
+        uint24 satId;
+        for (uint8 i = 0; i < satSubmittedMapping[msg.sender].length; i++) {
+            satId = satSubmittedMapping[msg.sender][i];
+            scores[i] = trustMapping[msg.sender].sat2trustMapping[satId];
+        }
+        reputation = trustMapping[msg.sender].reputation;
+    }
+
+    // Returns the satellite submitted by the sender address
+    function viewSatSubmitted() public view returns (uint24[] memory sats) {
+        sats = satSubmittedMapping[msg.sender];
+    }
+
+    function sqrt(uint256 y) internal pure returns (uint256 z) {
+        if (y > 3) {
+            z = y;
+            uint256 x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+            z = 1;
+        }
     }
 }
