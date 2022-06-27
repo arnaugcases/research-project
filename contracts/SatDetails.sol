@@ -43,6 +43,9 @@ contract SatDetails {
     mapping(address => uint8) reputationMapping;
     mapping(address => reputationStruct) scoresMapping;
 
+    // Events
+    event trustScoreComputed(uint24 satId, uint8[] iteration);
+
     function submitSatDetails(
         uint24 _satId,
         uint32 _inclination,
@@ -61,8 +64,8 @@ contract SatDetails {
 
         if (satOccurenceMapping[_satId].observer.length >= 3) {
             consensusSatDetails(_satId);
-            //computeTrustScores(_satId);
-            //computeReputation();
+            computeTrustScores(_satId);
+            computeReputation();
         }
     }
 
@@ -81,70 +84,83 @@ contract SatDetails {
 
     // Compute the trust and reputation scores
     function computeTrustScores(uint24 _satId) internal {
-        int32 inclination;
-        int32 apogee;
-        int32 perigee;
-        uint8 trustScore;
-        int32 inclinationError;
-        int32 apogeeError;
-        int32 perigeeError;
-        uint8 satScoreArrayIndex;
-
-        int32 consensusInclination = int32(
-            satDetailsMapping[_satId].inclination
+        uint8 trustScore = 50;
+        uint8 satIndex;
+        uint8 totalError;
+        address obs;
+        uint8[] memory iterations = new uint8[](
+            satOccurenceMapping[_satId].observer.length
         );
-        int32 consensusApogee = int32(satDetailsMapping[_satId].apogee);
-        int32 consensusPerigee = int32(satDetailsMapping[_satId].perigee);
 
         for (
             uint8 i = 0;
             i < satOccurenceMapping[_satId].observer.length;
             i++
         ) {
-            inclination = int32(satOccurenceMapping[_satId].inclinationOcc[i]);
-            apogee = int32(satOccurenceMapping[_satId].apogeeOcc[i]);
-            perigee = int32(satOccurenceMapping[_satId].perigeeOcc[i]);
+            totalError = computeOrbitError(_satId, i);
+            iterations[i] = i;
 
-            inclinationError =
-                ((inclination - consensusInclination) * 100) /
-                consensusInclination; // From 0 to 100
-            inclinationError = inclinationError < 0
-                ? -inclinationError
-                : inclinationError;
+            //trustScore = totalError > 100 ? 0 : 100 - totalError;
+            trustScore = i;
 
-            apogeeError = ((apogee - consensusApogee) * 100) / consensusApogee;
-            apogeeError = apogeeError < 0 ? -apogeeError : apogeeError;
+            obs = satOccurenceMapping[_satId].observer[i];
 
-            perigeeError =
-                ((perigee - consensusPerigee) * 100) /
-                consensusPerigee;
-            perigeeError = perigeeError < 0 ? -perigeeError : perigeeError;
+            scoresMapping[obs].scores.push(trustScore);
 
-            trustScore =
-                100 -
-                uint8(uint32(inclinationError + apogeeError + perigeeError));
-
-            address obs = satOccurenceMapping[_satId].observer[i];
-
-            if (scoresMapping[obs].satIdScoreExist[_satId] == false) {
-                scoresMapping[obs].satIdScoreExist[_satId] = true;
-                scoresMapping[obs].scores.push(trustScore);
-                scoresMapping[obs].scoreIndex[_satId] = uint8(
-                    scoresMapping[obs].scores.length - 1
-                );
-            } else {
-                scoresMapping[obs].scores[
-                    scoresMapping[obs].scoreIndex[_satId]
-                ] = trustScore;
-            }
+            // if (scoresMapping[obs].satIdScoreExist[_satId] == false) {
+            //     scoresMapping[obs].scores.push(trustScore);
+            //     satIndex = uint8(scoresMapping[obs].scores.length - 1);
+            //     scoresMapping[obs].scoreIndex[_satId] = satIndex;
+            //     scoresMapping[obs].satIdScoreExist[_satId] = true;
+            // } else {
+            //     scoresMapping[obs].scores[
+            //         scoresMapping[obs].scoreIndex[_satId]
+            //     ] = trustScore;
+            // }
         }
+        emit trustScoreComputed(_satId, iterations);
+    }
+
+    // This function computes the error between orbits
+    function computeOrbitError(uint24 _satId, uint8 _i)
+        internal
+        view
+        returns (uint8)
+    {
+        int32 consensusInclination = int32(
+            satDetailsMapping[_satId].inclination
+        );
+        int32 consensusApogee = int32(satDetailsMapping[_satId].apogee);
+        int32 consensusPerigee = int32(satDetailsMapping[_satId].perigee);
+
+        int32 inclination = int32(
+            satOccurenceMapping[_satId].inclinationOcc[_i]
+        );
+        int32 apogee = int32(satOccurenceMapping[_satId].apogeeOcc[_i]);
+        int32 perigee = int32(satOccurenceMapping[_satId].perigeeOcc[_i]);
+
+        int32 inclinationError = ((inclination - consensusInclination) * 100) /
+            consensusInclination;
+        inclinationError = inclinationError < 0
+            ? -inclinationError
+            : inclinationError;
+
+        int32 apogeeError = ((apogee - consensusApogee) * 100) /
+            consensusApogee;
+        apogeeError = apogeeError < 0 ? -apogeeError : apogeeError;
+
+        int32 perigeeError = ((perigee - consensusPerigee) * 100) /
+            consensusPerigee;
+        perigeeError = perigeeError < 0 ? -perigeeError : perigeeError;
+
+        return uint8(uint32(inclinationError + apogeeError + perigeeError));
     }
 
     // Computes the reputation of an observer
     function computeReputation() internal {
         uint8 reputation;
         uint16 totalReputation;
-        uint8 scores;
+        uint16 scores;
         for (uint8 i = 0; i < satIds.length; i++) {
             if (scoresMapping[msg.sender].satIdScoreExist[satIds[i]]) {
                 reputation = scoresMapping[msg.sender].scores[
@@ -155,9 +171,9 @@ contract SatDetails {
             }
         }
 
-        reputation = uint8(totalReputation / scores);
+        //reputation = uint8(totalReputation / scores);
 
-        reputationMapping[msg.sender] = reputation;
+        reputationMapping[msg.sender] = 0;
     }
 
     /*
@@ -177,6 +193,23 @@ contract SatDetails {
         inclination = satDetailsMapping[_satId].inclination;
         apogee = satDetailsMapping[_satId].apogee;
         perigee = satDetailsMapping[_satId].perigee;
+    }
+
+    // Returns the satellite occurences
+    function viewSatOccurences(uint24 _satId)
+        public
+        view
+        returns (
+            uint32[] memory inclinationOcc,
+            uint32[] memory apogeeOcc,
+            uint32[] memory perigeeOcc,
+            address[] memory observer
+        )
+    {
+        inclinationOcc = satOccurenceMapping[_satId].inclinationOcc;
+        apogeeOcc = satOccurenceMapping[_satId].apogeeOcc;
+        perigeeOcc = satOccurenceMapping[_satId].perigeeOcc;
+        observer = satOccurenceMapping[_satId].observer;
     }
 
     /*

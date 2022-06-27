@@ -1,4 +1,4 @@
-from brownie import SatDetails, accounts, network, config
+from brownie import SatDetails, accounts, network, config, exceptions
 from scripts.Deploy import deploy_satDetails
 from scripts.helpful_scripts import get_account
 import numpy as np
@@ -10,7 +10,7 @@ satInfo = [
     {"id": 4, "apogee": 3650000, "perigee": 3600000, "inclination": 500},
 ]
 
-totalSatellites = len(satInfo)
+totalSatellites = 1
 totalAccounts = 5
 
 submittedData = [
@@ -39,9 +39,11 @@ def submitData():
         for satIndex in range(0, totalSatellites):
             noise = np.random.normal(0, 1)
             id = satInfo[satIndex]["id"]
-            inclination = satInfo[satIndex]["inclination"] + int(noise * 100)
-            apogee = satInfo[satIndex]["apogee"] + int(noise * 200)
-            perigee = satInfo[satIndex]["perigee"] + int(noise * 200)
+            inclination = satInfo[satIndex]["inclination"] + int(
+                noise * 15 * (satIndex + 1)
+            )
+            apogee = satInfo[satIndex]["apogee"] + int(noise * 150 * (satIndex + 1))
+            perigee = satInfo[satIndex]["perigee"] + int(noise * 150 * (satIndex + 1))
 
             submittedData[satIndex]["apogee"].append(apogee)
             submittedData[satIndex]["inclination"].append(inclination)
@@ -51,6 +53,16 @@ def submitData():
             transaction = satDetails.submitSatDetails(
                 id, inclination, apogee, perigee, {"from": account}
             )
+
+            try:
+                satIdTx = transaction.events["trustScoreComputed"]["satId"]
+                iterationsTx = transaction.events["trustScoreComputed"]["iteration"]
+
+                print(f"Transaction submitted for satellite {satIdTx}")
+                print(f"Iterations done to compute trust: {iterationsTx}")
+                break
+            except exceptions.EventLookupError:
+                pass
 
     transaction.wait(1)
 
@@ -66,10 +78,22 @@ def readParameters(satDetails):
         apogeeReal = satInfo[satIndex]["apogee"]
         perigeeReal = satInfo[satIndex]["perigee"]
 
+        (
+            inclinationOcc,
+            apogeeOcc,
+            perigeeOcc,
+            observers,
+        ) = satDetails.viewSatOccurences(id)
+
         print("--------------------------------------------------------")
         print(f"Satellite {id} (inclination, apogee, perigee): ")
         print(f"Real values: {inclinationReal}, {apogeeReal}, {perigeeReal}")
         print(f"Consensus values: {inclination}, {apogee}, {perigee}")
+        print("")
+        print(f"Inclination occurences: {inclinationOcc}")
+        print(f"Apogee occurences: {apogeeOcc}")
+        print(f"Perigee occurences: {perigeeOcc}")
+        print(f"Observers: {observers}")
         print("--------------------------------------------------------")
 
     # print("The final trust scores and reputation are:\n")
@@ -100,4 +124,4 @@ def display_data():
 def main():
     satDetails = submitData()
     readParameters(satDetails)
-    display_data()
+    # display_data()
