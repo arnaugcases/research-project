@@ -1,90 +1,63 @@
-from brownie import SatDetails, accounts, network, config, exceptions
-from scripts.Deploy import deploy_satDetails
+from brownie import AircraftDatabase, accounts, network, config, exceptions
+from scripts.Deploy import deploy_aircraft_dabase
 from scripts.helpful_scripts import get_account
+import json
 import numpy as np
+import time
 
-satInfo = [
-    {"id": 0, "apogee": 534000, "perigee": 513000, "inclination": 9751},
-    {"id": 1, "apogee": 500000, "perigee": 480000, "inclination": 4500},
-    {"id": 2, "apogee": 800000, "perigee": 795000, "inclination": 1545},
-    {"id": 3, "apogee": 3650000, "perigee": 3600000, "inclination": 500},
-]
+TOTAL_ACCOUNTS = 1
 
-totalSatellites = len(satInfo)
-totalAccounts = 5
+def extract_aircraft_data():
+
+    file_name = "./scripts/aircraft_data.json"
+    with open(file_name, 'r') as f:
+        data = json.load(f)
+        data = data["call"]
+    
+    return data
 
 
-def submitData():
+def submit_data(data):
+    # Deploy contract
     account = get_account(0)
-
     if network.show_active() == "development":
-        print("Deploy contract!")
-        satDetails = SatDetails.deploy(
-            {"from": account},
-            publish_source=config["networks"][network.show_active()].get("verify"),
-        )
+        aircraft_details = deploy_aircraft_dabase()
+        time.sleep(1)
     else:
-        satDetails = SatDetails[-1]
+        aircraft_details = AircraftDatabase[-1]
 
-    for accountIndex in range(0, totalAccounts):
-        account = get_account(accountIndex)
+    # Submit data
+    for epoch in data:
+        epoch_time = epoch["time"]
 
-        for satIndex in range(0, totalSatellites):
-            noise = np.random.normal(0, 1)
-            id = satInfo[satIndex]["id"]
-            inclination = satInfo[satIndex]["inclination"] + int(
-                noise * 15 * (satIndex + 1)
+        keys_to_check = ["icao24", "longitude", "latitude", "on_ground", "velocity", "true_track"]
+
+        for aircraft in epoch["states"]:
+            if any(aircraft[key] is None for key in keys_to_check):
+                continue
+
+            icao24 = aircraft["icao24"]
+            longitude = int(aircraft["longitude"] * 1e4)
+            latitude = int(aircraft["latitude"] * 1e4)
+            on_ground = aircraft["on_ground"]
+            geo_altitude = 0 if on_ground else int(aircraft["geo_altitude"] * 1e2)
+            velocity = int(aircraft["velocity"] * 1e2)
+            true_track = int(aircraft["true_track"] * 1e2)
+            vertical_rate = 0 if on_ground else int(aircraft["vertical_rate"] * 1e2)
+            
+            transaction = aircraft_details.submitAircraftData(
+                icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
             )
-            apogee = satInfo[satIndex]["apogee"] + int(noise * 150 * (satIndex + 1))
-            perigee = satInfo[satIndex]["perigee"] + int(noise * 150 * (satIndex + 1))
-
-            print(f"Submit data for satellite {id} and account {accountIndex}")
-            transaction = satDetails.submitSatDetails(
-                id, inclination, apogee, perigee, {"from": account}
-            )
-
+        
     transaction.wait(1)
 
-    return satDetails
 
-
-def readParameters(satDetails):
-    for satIndex in range(0, totalSatellites):
-        id = satInfo[satIndex]["id"]
-        (id, inclination, apogee, perigee) = satDetails.viewSatDetails(id)
-
-        inclinationReal = satInfo[satIndex]["inclination"]
-        apogeeReal = satInfo[satIndex]["apogee"]
-        perigeeReal = satInfo[satIndex]["perigee"]
-
-        (
-            inclinationOcc,
-            apogeeOcc,
-            perigeeOcc,
-            observers,
-        ) = satDetails.viewSatOccurences(id)
-
-        print("--------------------------------------------------------")
-        print(f"Satellite {id} (inclination, apogee, perigee): ")
-        print(f"Real values: {inclinationReal}, {apogeeReal}, {perigeeReal}")
-        print(f"Consensus values: {inclination}, {apogee}, {perigee}")
-        print("")
-        print(f"Inclination occurences: {inclinationOcc}")
-        print(f"Apogee occurences: {apogeeOcc}")
-        print(f"Perigee occurences: {perigeeOcc}")
-        print(f"Observers: {observers}")
-        print("--------------------------------------------------------")
-
-    for accountIndex in range(0, totalAccounts):
-        account = get_account(accountIndex)
-        sat = satDetails.viewSatSubmitted({"from": account})
-        (scores, reputation) = satDetails.viewReputation({"from": account})
-        print(f"Address: {account}")
-        print(f"Sat ids: {sat}")
-        print(f"Trust scores: {scores}")
-        print(f"Reputation: {reputation}\n")
-
+    # Return contract
+    return aircraft_details
 
 def main():
-    satDetails = submitData()
-    readParameters(satDetails)
+    # Obtain the list of epochs and their information
+    data = extract_aircraft_data()
+
+    # Submit to the smart contract
+    aircraft_details = submit_data(data)
