@@ -3,8 +3,19 @@
 pragma solidity ^0.8.0;
 
 contract AircraftDatabase {
-    // Struct for storing the last known information about an aircraft
-    struct Aircraft {
+    /* 
+    ---------------------------------
+            Public Variables 
+    ---------------------------------
+    */
+    // Array storing all the timestamps for which aircraft data is available
+    uint32[] public epochList;
+
+    // List of aircraft Id in each epoch
+    mapping(uint32 => bytes6[]) public aircraftInEpoch;
+
+    // Most recent information about an aircraft
+    struct AircraftStateVector {
         int256 longitude;
         int256 latitude;
         uint256 geoAltitude;
@@ -12,15 +23,33 @@ contract AircraftDatabase {
         uint256 velocity;
         uint256 trueTrack;
         int16 verticalRate;
+        uint32 timestamp;
     }
 
+    mapping(bytes6 => AircraftStateVector) public aircraftInfo;
+
+    // List of contributors that submitted information for aircraft
+    address[] public listOfContributors;
+
+    // Mapping to check if the address has already contributed
+    mapping(address => bool) public addressContributed;
+
+    // Reputation scores (0-100) for each contributor
+    mapping(address => uint8) public reputationScore;
+
+    /* 
+    ---------------------------------
+            Private Variables 
+    ---------------------------------
+    */
+
     // Mapping that relates each icao24 identifier to a mapping of epochs and their associated data
-    mapping(bytes6 => mapping(uint256 => Aircraft)) public aircraftData;
+    //mapping(bytes6 => mapping(uint256 => Aircraft)) public aircraftData;
 
     // Mapping that relates each icao24 identifier to an array of epochs for which data is available
     mapping(bytes6 => uint256[]) public aircraftEpochs;
 
-    // Array storing all the aircraft for which the smart contract has data
+    // Array storing all the aircraft icao24 identifier for which the smart contract has data
     bytes6[] public aircraftList;
 
     // Function for adding aircraft data for a specific epoch
