@@ -6,6 +6,8 @@ import numpy as np
 import time
 
 TOTAL_ACCOUNTS = 5
+TOTAL_EPOCHS = 5
+TOTAL_AIRCRAFT = 5
 
 def extract_aircraft_data():
     file_name = "./scripts/reduced_aircraft_data.json"
@@ -29,8 +31,7 @@ def submit_data(data):
     # 1st - Select 1 epoch
     epoch_count = 0
     for epoch in data:
-        # Only consider 5 epoch
-        if epoch_count > 4: break
+        if epoch_count >= TOTAL_EPOCHS: break
         else: epoch_count += 1
 
         epoch_time = epoch["time"]
@@ -38,8 +39,7 @@ def submit_data(data):
         aircraft_count = 0
         # 2nd - Select each aircraft present in the epoch
         for aircraft in epoch["states"]:
-            # Only consider 5 aircraft
-            if aircraft_count > 4: break
+            if aircraft_count >= TOTAL_AIRCRAFT: break
             else: aircraft_count += 1
 
             icao24 = aircraft["icao24"]
