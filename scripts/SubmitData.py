@@ -5,11 +5,10 @@ import json
 import numpy as np
 import time
 
-TOTAL_ACCOUNTS = 1
+TOTAL_ACCOUNTS = 5
 
 def extract_aircraft_data():
-
-    file_name = "./scripts/aircraft_data.json"
+    file_name = "./scripts/reduced_aircraft_data.json"
     with open(file_name, 'r') as f:
         data = json.load(f)
         data = data["call"]
@@ -26,34 +25,56 @@ def submit_data(data):
     else:
         aircraft_details = AircraftDatabase[-1]
 
-    # Submit data
+    # Submit data for each account
+    # 1st - Select 1 epoch
+    epoch_count = 0
     for epoch in data:
+        # Only consider 5 epoch
+        if epoch_count > 4: break
+        else: epoch_count += 1
+
         epoch_time = epoch["time"]
 
-        keys_to_check = ["icao24", "longitude", "latitude", "on_ground", "velocity", "true_track"]
-
+        aircraft_count = 0
+        # 2nd - Select each aircraft present in the epoch
         for aircraft in epoch["states"]:
-            if any(aircraft[key] is None for key in keys_to_check):
-                continue
+            # Only consider 5 aircraft
+            if aircraft_count > 4: break
+            else: aircraft_count += 1
 
             icao24 = aircraft["icao24"]
             longitude = int(aircraft["longitude"] * 1e4)
             latitude = int(aircraft["latitude"] * 1e4)
             on_ground = aircraft["on_ground"]
-            geo_altitude = 0 if on_ground else int(aircraft["geo_altitude"] * 1e2)
+            geo_altitude = int(aircraft["geo_altitude"] * 1e2)
             velocity = int(aircraft["velocity"] * 1e2)
             true_track = int(aircraft["true_track"] * 1e2)
-            vertical_rate = 0 if on_ground else int(aircraft["vertical_rate"] * 1e2)
-            
-            transaction = aircraft_details.submitAircraftData(
-                icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
-            )
-        
-    transaction.wait(1)
+            vertical_rate = int(aircraft["vertical_rate"] * 1e2)
 
+            # 3rd - Submit 1 state vector per account
+            for account_index in range(0, TOTAL_ACCOUNTS):
+                account = get_account(account_index)
+            
+                transaction = aircraft_details.submitAircraftData(
+                    icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
+                )
+
+    # Wait 1 second before finishing to avoid any errors  
+    transaction.wait(1)
 
     # Return contract
     return aircraft_details
+
+
+def read_parameters(aircraft_details):
+    # Get list of contributors
+    contributors = aircraft_details.getContributorList()
+    print(f"List of contributors:\n {contributors}")
+
+    # Get list of aircraft
+    aircraft_list = aircraft_details.getAircraftList()
+    print(f"Aircraft list:\n {aircraft_list}")
+
 
 def main():
     # Obtain the list of epochs and their information
@@ -61,3 +82,6 @@ def main():
 
     # Submit to the smart contract
     aircraft_details = submit_data(data)
+
+    # Extract information from the smart contract
+    read_parameters(aircraft_details)
