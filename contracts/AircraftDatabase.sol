@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
+
+import "./StateEstimation.sol";
+import "./Reputation.sol";
 
 contract AircraftDatabase {
     /* 
@@ -93,7 +95,7 @@ contract AircraftDatabase {
             // The information is for a new epoch
 
             // 1st - Compute the state estimation for the aircraft
-            //computeEstimates();
+            computeEstimates();
 
             // 2nd - Compute trust scores
 
@@ -119,6 +121,12 @@ contract AircraftDatabase {
     /* 
         PRIVATE functions (to modify data)
     */
+    function computeEstimates() private {
+        /* Iterate through each aircraft in epoch and compute its estimate,
+           based on the values for the current epoch and the previous estimate.
+        */
+        for (uint i = 0; i < aircraftListCurrentEpoch.length; i++) {}
+    }
 
     function resetEpochVariables() private {
         for (uint i = 0; i < aircraftListCurrentEpoch.length; i++) {
