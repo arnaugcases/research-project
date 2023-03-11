@@ -33,31 +33,40 @@ def submit_data(data):
     for epoch in data:
         if epoch_count >= TOTAL_EPOCHS: break
         else: epoch_count += 1
-
+        print(f"Epoch {epoch_count}")
         epoch_time = epoch["time"]
 
-        aircraft_count = 0
-        # 2nd - Select each aircraft present in the epoch
-        for aircraft in epoch["states"]:
-            if aircraft_count >= TOTAL_AIRCRAFT: break
-            else: aircraft_count += 1
+        # 3rd - Submit the aircraft states per account
+        for account_index in range(0, TOTAL_ACCOUNTS):
+            account = get_account(account_index)
 
-            icao24 = aircraft["icao24"]
-            longitude = int(aircraft["longitude"] * 1e4)
-            latitude = int(aircraft["latitude"] * 1e4)
-            on_ground = aircraft["on_ground"]
-            geo_altitude = int(aircraft["geo_altitude"] * 1e2)
-            velocity = int(aircraft["velocity"] * 1e2)
-            true_track = int(aircraft["true_track"] * 1e2)
-            vertical_rate = int(aircraft["vertical_rate"] * 1e2)
+            icao24 = []
+            longitude = []
+            latitude = []
+            on_ground = []
+            geo_altitude = []
+            velocity = []
+            true_track = []
+            vertical_rate = []
 
-            # 3rd - Submit 1 state vector per account
-            for account_index in range(0, TOTAL_ACCOUNTS):
-                account = get_account(account_index)
+            aircraft_count = 0
+            # 2nd - Select each aircraft present in the epoch
+            for aircraft in epoch["states"]:
+                if aircraft_count >= TOTAL_AIRCRAFT: break
+                else: aircraft_count += 1
+
+                icao24.append(aircraft["icao24"])
+                longitude.append(aircraft["longitude"] * 1e4)
+                latitude.append(aircraft["latitude"] * 1e4)
+                on_ground.append(aircraft["on_ground"])
+                geo_altitude.append(int(aircraft["geo_altitude"] * 1e2))
+                velocity.append(int(aircraft["velocity"] * 1e2))
+                true_track.append(int(aircraft["true_track"] * 1e2))
+                vertical_rate.append(int(aircraft["vertical_rate"] * 1e2))
             
-                transaction = aircraft_details.submitAircraftData(
-                    icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
-                )
+            transaction = aircraft_details.submitAircraftData(
+                icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
+            )
 
     # Wait 1 second before finishing to avoid any errors  
     transaction.wait(1)
@@ -80,8 +89,13 @@ def main():
     # Obtain the list of epochs and their information
     data = extract_aircraft_data()
 
+    start_time = time.time()
     # Submit to the smart contract
     aircraft_details = submit_data(data)
+    end_time = time.time()
+    total_time = end_time - start_time
+
+    print(f"Total execution time: {total_time} seconds")
 
     # Extract information from the smart contract
     read_parameters(aircraft_details)

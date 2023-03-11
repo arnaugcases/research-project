@@ -5,11 +5,6 @@ import "./StateEstimation.sol";
 import "./Reputation.sol";
 
 contract AircraftDatabase {
-    /* 
-    ---------------------------------
-            Public Variables 
-    ---------------------------------
-    */
     // Most recent information about an aircraft
     struct AircraftStateVector {
         int24 longitude;
@@ -42,42 +37,37 @@ contract AircraftDatabase {
 
     // Structure to store the new values for a given aircraft
     struct AircraftStateOccurrences {
-        int24[] longitude;
-        int24[] latitude;
-        uint24[] geoAltitude;
-        bool[] onGround;
-        int24[] velocity;
-        int24[] trueTrack;
-        int16[] verticalRate;
+        int24 longitude;
+        int24 latitude;
+        uint24 geoAltitude;
+        bool onGround;
+        int24 velocity;
+        int24 trueTrack;
+        int16 verticalRate;
+        address contributor;
     }
 
-    mapping(bytes3 => AircraftStateOccurrences) aircraftOccurrences;
+    mapping(bytes3 => AircraftStateOccurrences[]) aircraftOccurrences;
 
     // List of all aircraft submitted at current epoch
     bytes3[] aircraftListCurrentEpoch;
 
     mapping(bytes3 => bool) public isAircraftInCurrentEpoch;
 
-    uint32 private currentEpoch;
+    uint32 public currentEpoch;
 
     // Function for adding aircraft data for a specific epoch
     function submitAircraftData(
-        bytes3 _icao24,
+        bytes3[] memory _icao24,
         uint32 _epoch,
-        int24 _longitude,
-        int24 _latitude,
-        uint24 _geoAltitude,
-        bool _onGround,
-        int24 _velocity,
-        int24 _trueTrack,
-        int16 _verticalRate
+        int24[] memory _longitude,
+        int24[] memory _latitude,
+        uint24[] memory _geoAltitude,
+        bool[] memory _onGround,
+        int24[] memory _velocity,
+        int24[] memory _trueTrack,
+        int16[] memory _verticalRate
     ) public {
-        // If the aircraft is not already in the aircraftList array, add it
-        if (!isAircraftInfoAvailable[_icao24]) {
-            isAircraftInfoAvailable[_icao24] = true;
-            aircraftList.push(_icao24);
-        }
-
         // Add the sender to the list of contributors
         if (!addressContributed[msg.sender]) {
             addressContributed[msg.sender] = true;
@@ -87,9 +77,11 @@ contract AircraftDatabase {
         // Update the occurrences structure if it is for the same epoch
         if (currentEpoch == 0 || currentEpoch == _epoch) {
             // Update list of aircraft in current epoch
-            if (!isAircraftInCurrentEpoch[_icao24]) {
-                isAircraftInCurrentEpoch[_icao24] = true;
-                aircraftListCurrentEpoch.push(_icao24);
+            for (uint i = 0; i < _icao24.length; i++) {
+                if (!isAircraftInCurrentEpoch[_icao24[i]]) {
+                    isAircraftInCurrentEpoch[_icao24[i]] = true;
+                    aircraftListCurrentEpoch.push(_icao24[i]);
+                }
             }
         } else if (currentEpoch != _epoch) {
             // The information is for a new epoch
@@ -106,13 +98,26 @@ contract AircraftDatabase {
         }
 
         // Add values to the occurrence structure
-        aircraftOccurrences[_icao24].longitude.push(_longitude);
-        aircraftOccurrences[_icao24].latitude.push(_latitude);
-        aircraftOccurrences[_icao24].geoAltitude.push(_geoAltitude);
-        aircraftOccurrences[_icao24].onGround.push(_onGround);
-        aircraftOccurrences[_icao24].velocity.push(_velocity);
-        aircraftOccurrences[_icao24].trueTrack.push(_trueTrack);
-        aircraftOccurrences[_icao24].verticalRate.push(_verticalRate);
+        for (uint i = 0; i < _icao24.length; i++) {
+            aircraftOccurrences[_icao24[i]].push(
+                AircraftStateOccurrences(
+                    _longitude[i],
+                    _latitude[i],
+                    _geoAltitude[i],
+                    _onGround[i],
+                    _velocity[i],
+                    _trueTrack[i],
+                    _verticalRate[i],
+                    msg.sender
+                )
+            );
+
+            // If the aircraft is not already in the aircraftList array, add it. This is for all epochs.
+            if (!isAircraftInfoAvailable[_icao24[i]]) {
+                isAircraftInfoAvailable[_icao24[i]] = true;
+                aircraftList.push(_icao24[i]);
+            }
+        }
 
         // Update current epoch
         currentEpoch = _epoch;
@@ -121,11 +126,11 @@ contract AircraftDatabase {
     /* 
         PRIVATE functions (to modify data)
     */
-    function computeEstimates() private {
+    function computeEstimates() internal {
         /* Iterate through each aircraft in epoch and compute its estimate,
            based on the values for the current epoch and the previous estimate.
         */
-        for (uint i = 0; i < aircraftListCurrentEpoch.length; i++) {}
+        //StateEstimation.computeEstimates();
     }
 
     function resetEpochVariables() private {
