@@ -1,5 +1,5 @@
 from brownie import AircraftDatabase, accounts, network, config, exceptions
-from scripts.Deploy import deploy_aircraft_dabase
+from scripts.Deploy import deploy_aircraft_database
 from scripts.helpful_scripts import get_account
 import json
 import numpy as np
@@ -22,7 +22,7 @@ def submit_data(data):
     # Deploy contract
     account = get_account(0)
     if network.show_active() == "development":
-        aircraft_details = deploy_aircraft_dabase()
+        aircraft_details = deploy_aircraft_database()
         time.sleep(1)
     else:
         aircraft_details = AircraftDatabase[-1]

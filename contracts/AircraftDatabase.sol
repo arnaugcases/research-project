@@ -68,10 +68,11 @@ contract AircraftDatabase {
         int24[] memory _trueTrack,
         int16[] memory _verticalRate
     ) public {
+        address contributor = msg.sender;
         // Add the sender to the list of contributors
-        if (!addressContributed[msg.sender]) {
-            addressContributed[msg.sender] = true;
-            listOfContributors.push(msg.sender);
+        if (!addressContributed[contributor]) {
+            addressContributed[contributor] = true;
+            listOfContributors.push(contributor);
         }
 
         // Update the occurrences structure if it is for the same epoch
@@ -108,7 +109,7 @@ contract AircraftDatabase {
                     _velocity[i],
                     _trueTrack[i],
                     _verticalRate[i],
-                    msg.sender
+                    contributor
                 )
             );
 
@@ -130,7 +131,7 @@ contract AircraftDatabase {
         /* Iterate through each aircraft in epoch and compute its estimate,
            based on the values for the current epoch and the previous estimate.
         */
-        //StateEstimation.computeEstimates();
+        StateEstimation.computeEstimates(aircraftOccurrences[aircraftList[0]]);
     }
 
     function resetEpochVariables() private {
