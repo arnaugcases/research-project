@@ -131,7 +131,16 @@ contract AircraftDatabase {
         /* Iterate through each aircraft in epoch and compute its estimate,
            based on the values for the current epoch and the previous estimate.
         */
-        StateEstimation.computeEstimates(aircraftOccurrences[aircraftList[0]]);
+        bytes3 aircraftId;
+        AircraftStateVector memory estimatedState;
+        for (uint i = 0; i < aircraftListCurrentEpoch.length; i++) {
+            aircraftId = aircraftListCurrentEpoch[0];
+            estimatedState = StateEstimation.computeEstimates(
+                aircraftOccurrences[aircraftId],
+                currentEpoch
+            );
+            aircraftInfo[aircraftId] = estimatedState;
+        }
     }
 
     function resetEpochVariables() private {
@@ -156,5 +165,11 @@ contract AircraftDatabase {
 
     function getContributorList() public view returns (address[] memory) {
         return listOfContributors;
+    }
+
+    function getAircraftState(
+        bytes3 _aicraftId
+    ) public view returns (AircraftStateVector memory) {
+        return aircraftInfo[_aicraftId];
     }
 }

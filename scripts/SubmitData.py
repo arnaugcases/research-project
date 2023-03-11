@@ -67,6 +67,14 @@ def submit_data(data):
             transaction = aircraft_details.submitAircraftData(
                 icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
             )
+        
+        # Print the results of the smart contract
+        aircraft_to_evaluate = epoch["states"][0]
+
+        # During the first run the values will be 0 because the epoch won't have changed yet
+        print("Smart contract values of the aircraft: ")
+        print(aircraft_details.getAircraftState(aircraft_to_evaluate["icao24"]))
+
 
     # Wait 1 second before finishing to avoid any errors  
     transaction.wait(1)
