@@ -187,11 +187,15 @@ function position_prediction(int24 _delta_time, AircraftDatabase.AircraftStateVe
     //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
     
     //trigonometry factor *100, scale factor *10. Pi*1000 -> resulting angle in deg*10000
+    //trueTrack angle needs to be converted from deg*100 to an int between 0-16384, where 16384 means 360 deg
+    //Altitude converted to km, velocity from ms-1 * 100 to kms-1 *1/100
+    // pi*10000 = 31415
+    //result is in deg*10000, in agreement with longitude and latitude inputs
 
-    int24  delta_long = int24(int(Trigonometry.sin(uint16(int16(previous_estimate.trueTrack)))/328*previous_estimate.velocity*_delta_time/1000
-    *(Re*10/(Re+int24(previous_estimate.geoAltitude)/1000)))*10000/(2*int(Re)*3142)*360);
-	int24  delta_lat = int24(int(Trigonometry.cos(uint16(int16(previous_estimate.trueTrack)))/328*previous_estimate.velocity*_delta_time/1000*
-    (Re*10/(Re+int24(previous_estimate.geoAltitude)/1000)))*10000/(2*int(Re)*3142)*360);
+    int24  delta_long = int24(int(Trigonometry.sin(uint16(int16(int(previous_estimate.trueTrack*16384/36000))))/328*previous_estimate.velocity*_delta_time/10000
+    *(Re*10/(Re+int24(previous_estimate.geoAltitude)/100000)))*10000/(2*int(Re)*31415)*360);
+	int24  delta_lat = int24(int(Trigonometry.cos(uint16(int16(int(previous_estimate.trueTrack*16384/36000))))/328*previous_estimate.velocity*_delta_time/10000*
+    (Re*10/(Re+int24(previous_estimate.geoAltitude)/100000)))*10000/(2*int(Re)*31415)*360);
 	
 	data[0] = previous_estimate.longitude+delta_long; //assumes angle in deg*10000
     data[1] = previous_estimate.latitude+delta_lat;
