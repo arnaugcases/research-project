@@ -35,6 +35,15 @@ contract AircraftDatabase {
     // Reputation scores (0-100) for each contributor
     mapping(address => uint8) public reputationScore;
 
+    // Trust scores for each contributor for 1 epoch
+    mapping(address => uint8[]) public trustScores;
+
+    // Check if the contributor submitted in current epoch
+    mapping(address => bool) public contributorInCurrentEpoch;
+
+    // List of contributors in current epoch
+    address[] public listOfContributorsInCurrentEpoch;
+
     // Structure to store the new values for a given aircraft
     struct AircraftStateOccurrences {
         int24 longitude;
@@ -83,6 +92,11 @@ contract AircraftDatabase {
                     isAircraftInCurrentEpoch[_icao24[i]] = true;
                     aircraftListCurrentEpoch.push(_icao24[i]);
                 }
+
+                if (!contributorInCurrentEpoch[contributor]) {
+                    contributorInCurrentEpoch[contributor] = true;
+                    listOfContributorsInCurrentEpoch.push(contributor);
+                }
             }
         } else if (currentEpoch != _epoch) {
             // The information is for a new epoch
@@ -91,8 +105,10 @@ contract AircraftDatabase {
             computeEstimates();
 
             // 2nd - Compute trust scores
+            computeTrustScores();
 
             // 3rd - Compute reputation scores
+            computeReputationScores();
 
             // Delete the values of the variables from the previous epoch
             resetEpochVariables();
@@ -143,6 +159,10 @@ contract AircraftDatabase {
         }
     }
 
+    function computeTrustScores() internal {}
+
+    function computeReputationScores() internal {}
+
     function resetEpochVariables() private {
         for (uint i = 0; i < aircraftListCurrentEpoch.length; i++) {
             // Delete the values of the structure containing the occurrences
@@ -154,6 +174,16 @@ contract AircraftDatabase {
 
         // Delete the list of aircraft in current epoch
         delete aircraftListCurrentEpoch;
+
+        for (uint i = 0; i < listOfContributorsInCurrentEpoch.length; i++) {
+            delete contributorInCurrentEpoch[
+                listOfContributorsInCurrentEpoch[i]
+            ];
+
+            delete trustScores[listOfContributorsInCurrentEpoch[i]];
+        }
+
+        delete listOfContributorsInCurrentEpoch;
     }
 
     /* 

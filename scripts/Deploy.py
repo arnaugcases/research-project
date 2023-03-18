@@ -1,10 +1,11 @@
-from brownie import AircraftDatabase, StateEstimation, Reputation, network, config
+from brownie import AircraftDatabase, StateEstimation, Reputation, Trigonometry, network, config
 from scripts.helpful_scripts import get_account, LOCAL_BLOCKCHAIN_ENVIRONMENTS
 
 
 def deploy_aircraft_database():
     account = get_account(0)
     # Deploy libraries
+    trigonometry = Trigonometry.deploy({"from": account})
     state_estimation = StateEstimation.deploy({"from": account})
     reputation = Reputation.deploy({"from": account})
 
