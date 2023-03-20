@@ -36,7 +36,14 @@ contract AircraftDatabase {
     mapping(address => uint8) public reputationScore;
 
     // Trust scores for each contributor for 1 epoch
-    mapping(address => uint8[]) public trustScores;
+    struct ContributorTrustScores {
+        address[] interactedWithContributors;
+        mapping(address => bool) hasInteracted;
+        mapping(address => uint8[]) trustWithContributor;
+    }
+
+    // Information on trust scores ofr a given contributor
+    mapping(address => ContributorTrustScores) private trustScores;
 
     // Check if the contributor submitted in current epoch
     mapping(address => bool) public contributorInCurrentEpoch;
@@ -161,7 +168,9 @@ contract AircraftDatabase {
 
     function computeTrustScores() internal {}
 
-    function computeReputationScores() internal {}
+    function computeReputationScores() internal {
+        Reputation.computeReputationScores();
+    }
 
     function resetEpochVariables() private {
         for (uint i = 0; i < aircraftListCurrentEpoch.length; i++) {
