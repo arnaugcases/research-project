@@ -239,14 +239,14 @@ library StateEstimation {
 
 }
 
-int24  Re = 6371; //km
-int24  pi = 31415; //pi*10000
 
 
     function position_prediction(
         int24 _delta_time,
         AircraftDatabase.AircraftStateVector memory previous_estimate
-    )  returns (int24[] memory) {
+    ) pure internal returns (int24[] memory) {
+        int24  Re = 6371; //km
+        
         int24[] memory data = new int24[](2);
 
         //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
@@ -294,7 +294,10 @@ int24  pi = 31415; //pi*10000
     return data;
 }
 
-function position_prediction_improved(int24 _delta_time, AircraftDatabase.AircraftStateVector memory previous_estimate)  returns(int24[] memory){
+function position_prediction_improved(int24 _delta_time, AircraftDatabase.AircraftStateVector memory previous_estimate) pure internal returns(int24[] memory){
+    int24  Re = 6371; //km
+    int24  pi = 31415; //pi*10000
+    
     int24 d = _delta_time*previous_estimate.velocity/100000; //km
 
     int24[] memory data = new int24[](3);
