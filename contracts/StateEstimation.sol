@@ -56,7 +56,7 @@ library StateEstimation {
     }
 
     function observationError(
-        AircraftDatabase.AircraftStateVector[] memory observations,
+        AircraftDatabase.AircraftStateOccurrences[] memory observations,
         AircraftDatabase.AircraftStateVector memory trueValue,
         int errorAllowed
     ) public pure returns (int[] memory) {
@@ -235,15 +235,18 @@ library StateEstimation {
                 (2000 + gain)
         );
 
-        return trueValue;
-    }
+   return trueValue;
+
+}
+
+
 
     function position_prediction(
         int24 _delta_time,
         AircraftDatabase.AircraftStateVector memory previous_estimate
-    ) internal pure returns (int24[] memory) {
-        int24 Re = 6371; //km
-
+    ) pure internal returns (int24[] memory) {
+        int24  Re = 6371; //km
+        
         int24[] memory data = new int24[](2);
 
         //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
@@ -288,6 +291,60 @@ library StateEstimation {
         data[0] = previous_estimate.longitude + delta_long; //assumes angle in deg*10000
         data[1] = previous_estimate.latitude + delta_lat;
 
-        return data;
+    return data;
+}
+
+function position_prediction_improved(int24 _delta_time, AircraftDatabase.AircraftStateVector memory previous_estimate) pure internal returns(int24[] memory){
+    int24  Re = 6371; //km
+    int24  pi = 31415; //pi*10000
+    
+    int24 d = _delta_time*previous_estimate.velocity/100000; //km
+
+    int24[] memory data = new int24[](3);
+
+    if (previous_estimate.longitude<0){
+        previous_estimate.longitude += 360*10000;
     }
+        if (previous_estimate.latitude<0){
+        previous_estimate.latitude += 360*10000;
+    }
+
+    //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
+    //trigonometry factor *100, scale factor *10. Pi*1000 -> resulting angle in deg*10000
+/*
+    int24  delta_long = int24(int(Trigonometry.sin(uint16(int16(previous_estimate.trueTrack)))/328*previous_estimate.velocity*_delta_time/1000
+    *(Re*10/(Re+int24(previous_estimate.geoAltitude)/1000)))*10000/(2*int(Re)*3142)*360);
+	int24  delta_lat = int24(int(Trigonometry.cos(uint16(int16(previous_estimate.trueTrack)))/328*previous_estimate.velocity*_delta_time/1000*
+    (Re*10/(Re+int24(previous_estimate.geoAltitude)/1000)))*10000/(2*int(Re)*3142)*360);
+	*///assumes angle in deg*10000
+
+    int sin_lat1 = int(Trigonometry.sin(uint16(int16(int(previous_estimate.latitude)*16384/360/10000))))*10000/32767; //range +-10000
+
+    int cos_lat1 = int(Trigonometry.sin(uint16(int16(int(90*10000-previous_estimate.latitude)*16384/360/10000))))*10000/32767; //range +-10000
+
+    int DoverR = int(d)*1000/int(Re);//  d/R * 1000
+
+    int sin_track = int(Trigonometry.sin(uint16(int16(int(previous_estimate.trueTrack)*16384/360/100))))*10000/32767; //range +-10000
+
+    int cos_track = int(Trigonometry.sin(uint16(int16(int(90*100-previous_estimate.trueTrack)*16384/360/100))))*10000/32767; //range +-10000
+
+    data[1] = int24(asin(((sin_lat1*1000*10000+cos_lat1*DoverR*cos_track)/10000000))*1800000/int(pi)); //deg*10000 latitude
+
+    data[2] = (data[1] < 0) ? data[1] + 360*10000 : data[1];   // need a latitude angle in the range 0-360 deg
+
+    data[0] = previous_estimate.longitude + int24(atan(sin_track*DoverR*cos_lat1*10/(1*10000*10000-sin_lat1
+    *int(Trigonometry.sin(uint16(int16(int(data[1])*16384/360/10000))))*10000/32767))*1800000/int(pi));   //longitude in deg*10000
+    return data;
+}
+
+function asin(int256 x) public pure returns (int256) {   // input range +-10000, returns angle in radians*10000
+    int divider = 10000;
+    return x+x**3/6/divider**2+x**5*3/40/divider**4+15*x**7/(336*divider**6);
+}
+function atan(int256 x) public pure returns (int256) {   // input range +-10000, returns angle in radians*10000
+    int divider = 10000;
+    return x - x**3/3/divider**2+x**5/5/divider**4-x**7/7/divider**6;
+}
+
+
 }
