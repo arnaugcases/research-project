@@ -35,15 +35,12 @@ contract AircraftDatabase {
     // Reputation scores (0-100) for each contributor
     mapping(address => uint8) public reputationScore;
 
-    // Trust scores for each contributor for 1 epoch
-    struct ContributorTrustScores {
-        address[] interactedWithContributors;
-        mapping(address => bool) hasInteracted;
-        mapping(address => uint8[]) trustWithContributor;
-    }
+    // Malicious contributor
+    address private maliciousContributor;
+    bool private isMaliciousContributorEstablished = false;
 
-    // Information on trust scores ofr a given contributor
-    mapping(address => ContributorTrustScores) private trustScores;
+    // Information on trust scores of a given contributor
+    mapping(address => mapping(address => uint8[])) private trustScores;
 
     // Check if the contributor submitted in current epoch
     mapping(address => bool) public contributorInCurrentEpoch;
@@ -91,25 +88,18 @@ contract AircraftDatabase {
             listOfContributors.push(contributor);
         }
 
-        // Update the occurrences structure if it is for the same epoch
-        if (currentEpoch == 0 || currentEpoch == _epoch) {
-            // Update list of aircraft in current epoch
-            for (uint i = 0; i < _icao24.length; i++) {
-                if (!isAircraftInCurrentEpoch[_icao24[i]]) {
-                    isAircraftInCurrentEpoch[_icao24[i]] = true;
-                    aircraftListCurrentEpoch.push(_icao24[i]);
-                }
+        // Set the malicious contributor to the first one that sends data
+        if (!isMaliciousContributorEstablished) {
+            isMaliciousContributorEstablished = true;
+            maliciousContributor = contributor;
+        }
 
-                if (!contributorInCurrentEpoch[contributor]) {
-                    contributorInCurrentEpoch[contributor] = true;
-                    listOfContributorsInCurrentEpoch.push(contributor);
-                }
-            }
-        } else if (currentEpoch != _epoch) {
+        // Actions to take for a new epoch (but not the first call to the function)
+        if (currentEpoch != _epoch && currentEpoch != 0) {
             // The information is for a new epoch
 
             // 1st - Compute the state estimation for the aircraft
-            computeEstimates();
+            //computeEstimates();
 
             // 2nd - Compute trust scores
             computeTrustScores();
@@ -119,6 +109,20 @@ contract AircraftDatabase {
 
             // Delete the values of the variables from the previous epoch
             resetEpochVariables();
+        }
+
+        // Update list of aircraft in current epoch
+        for (uint i = 0; i < _icao24.length; i++) {
+            if (!isAircraftInCurrentEpoch[_icao24[i]]) {
+                isAircraftInCurrentEpoch[_icao24[i]] = true;
+                aircraftListCurrentEpoch.push(_icao24[i]);
+            }
+        }
+
+        // Add contributor to the list of contributos in current epoch
+        if (!contributorInCurrentEpoch[contributor]) {
+            contributorInCurrentEpoch[contributor] = true;
+            listOfContributorsInCurrentEpoch.push(contributor);
         }
 
         // Add values to the occurrence structure
@@ -166,7 +170,53 @@ contract AircraftDatabase {
         }
     }
 
-    function computeTrustScores() internal {}
+    function computeTrustScores() internal {
+        for (uint i = 0; i < listOfContributorsInCurrentEpoch.length; i++) {
+            address contributor1 = listOfContributorsInCurrentEpoch[i];
+            for (
+                uint j = i + 1;
+                j < listOfContributorsInCurrentEpoch.length;
+                j++
+            ) {
+                address contributor2 = listOfContributorsInCurrentEpoch[j];
+
+                // Determine the order of the contributor addresses
+                address smallerContributor = contributor1 < contributor2
+                    ? contributor1
+                    : contributor2;
+                address largerContributor = contributor1 < contributor2
+                    ? contributor2
+                    : contributor1;
+
+                // Clear previous epoch trust scores
+                delete trustScores[smallerContributor][largerContributor];
+
+                for (uint k = 0; k < aircraftListCurrentEpoch.length; k++) {
+                    // Check if any of the contributors is the malicious contributor and aircraft is the first one
+                    if (
+                        (smallerContributor == maliciousContributor ||
+                            largerContributor == maliciousContributor) && k == 0
+                    ) {
+                        trustScores[smallerContributor][largerContributor].push(
+                                randomNumberInRange(
+                                    0,
+                                    30,
+                                    (i + 1) * (j + 1) * (k + 1)
+                                )
+                            );
+                    } else {
+                        trustScores[smallerContributor][largerContributor].push(
+                                randomNumberInRange(
+                                    70,
+                                    100,
+                                    (i + 1) * (j + 1) * (k + 1)
+                                )
+                            );
+                    }
+                }
+            }
+        }
+    }
 
     function computeReputationScores() internal {
         Reputation.computeReputationScores();
@@ -188,8 +238,6 @@ contract AircraftDatabase {
             delete contributorInCurrentEpoch[
                 listOfContributorsInCurrentEpoch[i]
             ];
-
-            delete trustScores[listOfContributorsInCurrentEpoch[i]];
         }
 
         delete listOfContributorsInCurrentEpoch;
@@ -206,9 +254,52 @@ contract AircraftDatabase {
         return listOfContributors;
     }
 
+    function getContributorsInEpoch() public view returns (address[] memory) {
+        return listOfContributorsInCurrentEpoch;
+    }
+
     function getAircraftState(
         bytes3 _aicraftId
     ) public view returns (AircraftStateVector memory) {
         return aircraftInfo[_aicraftId];
+    }
+
+    function getTrustScores(
+        address contributor1,
+        address contributor2
+    ) public view returns (uint8[] memory) {
+        require(contributor1 != contributor2, "Contributors must be different");
+
+        address smallerContributor = contributor1 < contributor2
+            ? contributor1
+            : contributor2;
+        address largerContributor = contributor1 < contributor2
+            ? contributor2
+            : contributor1;
+
+        return trustScores[smallerContributor][largerContributor];
+    }
+
+    /* 
+    Helper functions
+    */
+    // Helper function to generate random number in a given range
+    function randomNumberInRange(
+        uint8 min,
+        uint8 max,
+        uint randNonce
+    ) private view returns (uint8) {
+        uint8 randomNum = uint8(
+            (uint256(
+                keccak256(
+                    abi.encodePacked(
+                        block.timestamp,
+                        block.difficulty,
+                        randNonce
+                    )
+                )
+            ) % (max - min + 1)) + min
+        );
+        return randomNum;
     }
 }

@@ -27,10 +27,17 @@ def submit_data(data):
     else:
         aircraft_details = AircraftDatabase[-1]
 
+    # Open the trust file as write to erase previous contents
+    with open("./scripts/trust_scores.json", "w") as f:
+        pass
+
+    # List to store all dictionaries
+    trust_scores_data = []
+
     # Submit data for each account
     # 1st - Select 1 epoch
     epoch_count = 0
-    for epoch in data:
+    for epoch_index, epoch in enumerate(data):
         if epoch_count >= TOTAL_EPOCHS: break
         else: epoch_count += 1
         print(f"Epoch {epoch_count}")
@@ -67,21 +74,50 @@ def submit_data(data):
             transaction = aircraft_details.submitAircraftData(
                 icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
             )
-        
-        # Print the results of the smart contract
-        aircraft_to_evaluate = epoch["states"][0]
 
-        # During the first run the values will be 0 because the epoch won't have changed yet
-        print("Smart contract values of the aircraft: ")
-        print(aircraft_details.getAircraftState(aircraft_to_evaluate["icao24"]))
+        # Store trust scores before starting the new epoch
+        if epoch_index > 0:
+            store_trust_scores(aircraft_details, epoch_index, trust_scores_data)
+
+    # Submit dummy data for an extra iteration to compute trust and reputation for the last epoch
+    account = get_account(0)
+    dummy_icao24 = ["000000"]
+    dummy_epoch_time = 0
+    dummy_values = [0] * len(dummy_icao24)
+    aircraft_details.submitAircraftData(
+        dummy_icao24, dummy_epoch_time, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, {"from": account}
+    )
+    store_trust_scores(aircraft_details, epoch_index, trust_scores_data)
 
 
     # Wait 1 second before finishing to avoid any errors  
     transaction.wait(1)
 
+    # Write trust score values result to file
+    with open("./scripts/trust_scores.json", "a") as f:
+        json.dump(trust_scores_data, f, indent=4)
+
     # Return contract
     return aircraft_details
 
+
+def store_trust_scores(aircraft_details, epoch_index, trust_scores_data):
+    contributors = aircraft_details.getContributorList()
+    epoch_trust_scores = {
+        "epoch": epoch_index,
+        "trust_scores": []
+    }
+
+    for i in range(len(contributors)):
+        for j in range(i + 1, len(contributors)):
+            trust_scores = aircraft_details.getTrustScores(contributors[i], contributors[j])
+            epoch_trust_scores["trust_scores"].append({
+                "pair": (f"Contributor {i+1}", f"Contributor {j+1}"),
+                "trust_scores": trust_scores
+            })
+
+    trust_scores_data.append(epoch_trust_scores)    
+    
 
 def read_parameters(aircraft_details):
     # Get list of contributors
