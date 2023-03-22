@@ -28,7 +28,7 @@ for record in data:
 # Plot the data
 fig, ax = plt.subplots()
 for account_number, reputations in account_reputations.items():
-    ax.plot(epochs, reputations, label=f"Account {account_number}")
+    ax.plot(epochs, reputations, label=f"Contributor {account_number}")
 
 ax.set_xlabel("Epoch number")
 ax.set_ylabel("Reputation score")

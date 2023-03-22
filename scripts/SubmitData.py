@@ -5,15 +5,14 @@ import json
 import numpy as np
 import time
 
-TOTAL_ACCOUNTS = 5
-TOTAL_EPOCHS = 5
-TOTAL_AIRCRAFT = 5
+TOTAL_ACCOUNTS = 5      # Max 10
+TOTAL_EPOCHS = 5       # Max 50
+TOTAL_AIRCRAFT = 5      # Max 10
 
 # Algorithm variables
-TOTAL_MALICIOUS_ACCOUNTS = 1
-ERRONEOUS_AIRCRAFT = 1
-REPUTATION_ALGORIHTM = 0
-AVERAGE_WEIGHT = 50
+TOTAL_MALICIOUS_ACCOUNTS = 2
+ERRONEOUS_AIRCRAFT = 2
+REPUTATION_ALGORITHM = 0    # 0 - simple average; 1 - weighted average 
 
 TRUST_RESULT_FILE = "./reports/trust_scores.json"
 REPUTATION_RESULT_FILE = "./reports/reputation_scores.json"
@@ -39,10 +38,9 @@ def setup_configuration():
     # Set configuration parameters
     aircraft_details.setParameters(
         TOTAL_ACCOUNTS, 
-        AVERAGE_WEIGHT, 
         TOTAL_MALICIOUS_ACCOUNTS, 
         ERRONEOUS_AIRCRAFT, 
-        REPUTATION_ALGORIHTM)
+        REPUTATION_ALGORITHM)
 
     # Open the trust file as write to erase previous contents
     with open(TRUST_RESULT_FILE, "w") as f:
@@ -163,16 +161,6 @@ def store_reputation_data(aircraft_details, epoch_index, reputation_scores_data)
         })
 
     reputation_scores_data.append(epoch_reputation_scores)
-    
-
-def read_parameters(aircraft_details):
-    # Get list of contributors
-    contributors = aircraft_details.getContributorList()
-    print(f"List of contributors:\n {contributors}")
-
-    # Get list of aircraft
-    aircraft_list = aircraft_details.getAircraftList()
-    print(f"Aircraft list:\n {aircraft_list}")
 
 
 def main():
@@ -187,6 +175,3 @@ def main():
     total_time = end_time - start_time
 
     print(f"Total execution time: {total_time} seconds")
-
-    # Extract information from the smart contract
-    read_parameters(aircraft_details)

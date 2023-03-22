@@ -70,7 +70,6 @@ contract AircraftDatabase {
 
     // Configuration variables
     uint8 private numberOfContributors;
-    uint8 private averageWeight;
     uint8 private numberOfMaliciousContributors;
     uint8 private erroenousAircraft;
     uint8 private reputationAlgorithm;
@@ -204,16 +203,19 @@ contract AircraftDatabase {
                 uint8 erroenousAircraftAvailable = erroenousAircraft;
 
                 for (uint k = 0; k < aircraftListCurrentEpoch.length; k++) {
-                    // Check if any of the contributors is the malicious contributor and aircraft is the first one
+                    // If both contributors are malicious or good, they will have
+                    // a high trust value between them. Only if one is malicious
+                    // and the other one not will they have a lower trust value.abi
+                    // Lower trust values are assigned for the total of erroneous data
                     if (
-                        isMaliciousContributor[smallerContributor] ||
-                        (isMaliciousContributor[largerContributor] &&
-                            erroenousAircraftAvailable > 0)
+                        (isMaliciousContributor[smallerContributor] !=
+                            isMaliciousContributor[largerContributor]) &&
+                        erroenousAircraftAvailable > 0
                     ) {
                         trustScores[smallerContributor][largerContributor].push(
                                 randomNumberInRange(
                                     0,
-                                    30,
+                                    50,
                                     (i + 1) * (j + 1) * (k + 1)
                                 )
                             );
@@ -221,7 +223,7 @@ contract AircraftDatabase {
                     } else {
                         trustScores[smallerContributor][largerContributor].push(
                                 randomNumberInRange(
-                                    70,
+                                    80,
                                     100,
                                     (i + 1) * (j + 1) * (k + 1)
                                 )
@@ -253,8 +255,7 @@ contract AircraftDatabase {
                 trustScores,
                 listOfContributorsInCurrentEpoch,
                 currentReputationScores,
-                reputationAlgorithm,
-                averageWeight
+                reputationAlgorithm
             );
 
         for (uint i = 0; i < numOfContributorsEpoch; i++) {
@@ -287,13 +288,11 @@ contract AircraftDatabase {
     // Contract setter function
     function setParameters(
         uint8 _numberOfContributors,
-        uint8 _averageWeight,
         uint8 _numberOfMaliciousContributors,
         uint8 _erroneousAircraft,
         uint8 _reputationAlgorithm
     ) public {
         numberOfContributors = _numberOfContributors;
-        averageWeight = _averageWeight;
         numberOfMaliciousContributors = _numberOfMaliciousContributors;
         erroenousAircraft = _erroneousAircraft;
         reputationAlgorithm = _reputationAlgorithm;
