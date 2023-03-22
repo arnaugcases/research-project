@@ -33,7 +33,7 @@ contract AircraftDatabase {
     mapping(address => bool) public addressContributed;
 
     // Reputation scores (0-100) for each contributor
-    mapping(address => uint8) public reputationScore;
+    mapping(address => uint) public reputationScore;
 
     // Malicious contributor
     address private maliciousContributor;
@@ -220,14 +220,14 @@ contract AircraftDatabase {
 
     function computeReputationScores() internal {
         uint numOfContributors = listOfContributorsInCurrentEpoch.length;
-        uint8[] memory currentReputationScores = new uint8[](numOfContributors);
+        uint[] memory currentReputationScores = new uint[](numOfContributors);
 
         for (uint i = 0; i < numOfContributors; i++) {
             address contributor = listOfContributorsInCurrentEpoch[i];
             currentReputationScores[i] = reputationScore[contributor];
         }
 
-        uint8[] memory updatedReputationScores = Reputation
+        uint[] memory updatedReputationScores = Reputation
             .computeReputationScores(
                 trustScores,
                 listOfContributorsInCurrentEpoch,
@@ -301,7 +301,7 @@ contract AircraftDatabase {
 
     function getReputationScore(
         address contributor
-    ) public view returns (uint8) {
+    ) public view returns (uint) {
         return reputationScore[contributor];
     }
 
