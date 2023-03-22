@@ -36,8 +36,7 @@ contract AircraftDatabase {
     mapping(address => uint) public reputationScore;
 
     // Malicious contributor
-    address private maliciousContributor;
-    bool private isMaliciousContributorEstablished = false;
+    mapping(address => bool) isMaliciousContributor;
 
     // Information on trust scores of a given contributor
     mapping(address => mapping(address => uint8[])) private trustScores;
@@ -69,6 +68,14 @@ contract AircraftDatabase {
 
     uint32 public currentEpoch;
 
+    // Configuration variables
+    uint8 private numberOfContributors;
+    uint8 private averageWeight;
+    uint8 private numberOfMaliciousContributors;
+    uint8 private erroenousAircraft;
+    uint8 private reputationAlgorithm;
+    bool private reputationFirstRun = true;
+
     // Function for adding aircraft data for a specific epoch
     function submitAircraftData(
         bytes3[] memory _icao24,
@@ -89,9 +96,12 @@ contract AircraftDatabase {
         }
 
         // Set the malicious contributor to the first one that sends data
-        if (!isMaliciousContributorEstablished) {
-            isMaliciousContributorEstablished = true;
-            maliciousContributor = contributor;
+        if (
+            !isMaliciousContributor[contributor] &&
+            numberOfMaliciousContributors > 0
+        ) {
+            isMaliciousContributor[contributor] = true;
+            numberOfMaliciousContributors -= 1;
         }
 
         // Actions to take for a new epoch (but not the first call to the function)
@@ -191,11 +201,14 @@ contract AircraftDatabase {
                 // Clear previous epoch trust scores
                 delete trustScores[smallerContributor][largerContributor];
 
+                uint8 erroenousAircraftAvailable = erroenousAircraft;
+
                 for (uint k = 0; k < aircraftListCurrentEpoch.length; k++) {
                     // Check if any of the contributors is the malicious contributor and aircraft is the first one
                     if (
-                        (smallerContributor == maliciousContributor ||
-                            largerContributor == maliciousContributor) && k == 0
+                        isMaliciousContributor[smallerContributor] ||
+                        (isMaliciousContributor[largerContributor] &&
+                            erroenousAircraftAvailable > 0)
                     ) {
                         trustScores[smallerContributor][largerContributor].push(
                                 randomNumberInRange(
@@ -204,6 +217,7 @@ contract AircraftDatabase {
                                     (i + 1) * (j + 1) * (k + 1)
                                 )
                             );
+                        erroenousAircraftAvailable -= 1;
                     } else {
                         trustScores[smallerContributor][largerContributor].push(
                                 randomNumberInRange(
@@ -219,23 +233,31 @@ contract AircraftDatabase {
     }
 
     function computeReputationScores() internal {
-        uint numOfContributors = listOfContributorsInCurrentEpoch.length;
-        uint[] memory currentReputationScores = new uint[](numOfContributors);
+        uint numOfContributorsEpoch = listOfContributorsInCurrentEpoch.length;
+        uint[] memory currentReputationScores = new uint[](
+            numOfContributorsEpoch
+        );
 
-        for (uint i = 0; i < numOfContributors; i++) {
+        for (uint i = 0; i < numOfContributorsEpoch; i++) {
             address contributor = listOfContributorsInCurrentEpoch[i];
             currentReputationScores[i] = reputationScore[contributor];
+            // If it is the first time being called, initialize all reputation
+            // scores to 100 / N, where N = number of contributors
+            if (reputationFirstRun)
+                currentReputationScores[i] += 100 / numOfContributorsEpoch;
         }
+        reputationFirstRun = false;
 
         uint[] memory updatedReputationScores = Reputation
             .computeReputationScores(
                 trustScores,
                 listOfContributorsInCurrentEpoch,
                 currentReputationScores,
-                0
+                reputationAlgorithm,
+                averageWeight
             );
 
-        for (uint i = 0; i < numOfContributors; i++) {
+        for (uint i = 0; i < numOfContributorsEpoch; i++) {
             address contributor = listOfContributorsInCurrentEpoch[i];
             reputationScore[contributor] = updatedReputationScores[i];
         }
@@ -262,8 +284,23 @@ contract AircraftDatabase {
         delete listOfContributorsInCurrentEpoch;
     }
 
+    // Contract setter function
+    function setParameters(
+        uint8 _numberOfContributors,
+        uint8 _averageWeight,
+        uint8 _numberOfMaliciousContributors,
+        uint8 _erroneousAircraft,
+        uint8 _reputationAlgorithm
+    ) public {
+        numberOfContributors = _numberOfContributors;
+        averageWeight = _averageWeight;
+        numberOfMaliciousContributors = _numberOfMaliciousContributors;
+        erroenousAircraft = _erroneousAircraft;
+        reputationAlgorithm = _reputationAlgorithm;
+    }
+
     /* 
-        VIEW functions (get data)
+        Contract getter functions
     */
     function getCurrentEpoch() public view returns (uint32) {
         return currentEpoch;
