@@ -28,11 +28,16 @@ def submit_data(data):
         aircraft_details = AircraftDatabase[-1]
 
     # Open the trust file as write to erase previous contents
-    with open("./scripts/trust_scores.json", "w") as f:
+    with open("./reports/trust_scores.json", "w") as f:
+        pass
+
+    # Open the reputation file as write to erase previous contents
+    with open("./reports/reputation_scores.json", "w") as f:
         pass
 
     # List to store all dictionaries
     trust_scores_data = []
+    reputation_scores_data = []
 
     # Submit data for each account
     # 1st - Select 1 epoch
@@ -78,6 +83,7 @@ def submit_data(data):
         # Store trust scores before starting the new epoch
         if epoch_index > 0:
             store_trust_scores(aircraft_details, epoch_index, trust_scores_data)
+            store_reputation_data(aircraft_details, epoch_index, reputation_scores_data)
 
     # Submit dummy data for an extra iteration to compute trust and reputation for the last epoch
     account = get_account(0)
@@ -88,14 +94,17 @@ def submit_data(data):
         dummy_icao24, dummy_epoch_time, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, {"from": account}
     )
     store_trust_scores(aircraft_details, epoch_index, trust_scores_data)
-
+    store_reputation_data(aircraft_details, epoch_index, reputation_scores_data)
 
     # Wait 1 second before finishing to avoid any errors  
     transaction.wait(1)
 
     # Write trust score values result to file
-    with open("./scripts/trust_scores.json", "a") as f:
+    with open("./reports/trust_scores.json", "a") as f:
         json.dump(trust_scores_data, f, indent=4)
+
+    with open("./reports/reputation_scores.json", "a") as f:
+        json.dump(reputation_scores_data, f, indent=4)
 
     # Return contract
     return aircraft_details
@@ -116,7 +125,24 @@ def store_trust_scores(aircraft_details, epoch_index, trust_scores_data):
                 "trust_scores": trust_scores
             })
 
-    trust_scores_data.append(epoch_trust_scores)    
+    trust_scores_data.append(epoch_trust_scores)  
+
+
+def store_reputation_data(aircraft_details, epoch_index, reputation_scores_data):
+    contributors = aircraft_details.getContributorList()
+    epoch_reputation_scores = {
+        "epoch": epoch_index,
+        "reputation_scores": []
+    }
+
+    for i in range(len(contributors)):
+        epoch_reputation_scores["reputation_scores"].append({
+            "Account number": i+1,
+            "Address": contributors[i],
+            "Reputation": aircraft_details.getReputationScore(contributors[i])
+        })
+
+    reputation_scores_data.append(epoch_reputation_scores)
     
 
 def read_parameters(aircraft_details):

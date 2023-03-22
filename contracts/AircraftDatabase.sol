@@ -219,7 +219,26 @@ contract AircraftDatabase {
     }
 
     function computeReputationScores() internal {
-        Reputation.computeReputationScores();
+        uint numOfContributors = listOfContributorsInCurrentEpoch.length;
+        uint8[] memory currentReputationScores = new uint8[](numOfContributors);
+
+        for (uint i = 0; i < numOfContributors; i++) {
+            address contributor = listOfContributorsInCurrentEpoch[i];
+            currentReputationScores[i] = reputationScore[contributor];
+        }
+
+        uint8[] memory updatedReputationScores = Reputation
+            .computeReputationScores(
+                trustScores,
+                listOfContributorsInCurrentEpoch,
+                currentReputationScores,
+                0
+            );
+
+        for (uint i = 0; i < numOfContributors; i++) {
+            address contributor = listOfContributorsInCurrentEpoch[i];
+            reputationScore[contributor] = updatedReputationScores[i];
+        }
     }
 
     function resetEpochVariables() private {
@@ -246,16 +265,16 @@ contract AircraftDatabase {
     /* 
         VIEW functions (get data)
     */
+    function getCurrentEpoch() public view returns (uint32) {
+        return currentEpoch;
+    }
+
     function getAircraftList() public view returns (bytes3[] memory) {
         return aircraftList;
     }
 
     function getContributorList() public view returns (address[] memory) {
         return listOfContributors;
-    }
-
-    function getContributorsInEpoch() public view returns (address[] memory) {
-        return listOfContributorsInCurrentEpoch;
     }
 
     function getAircraftState(
@@ -278,6 +297,12 @@ contract AircraftDatabase {
             : contributor1;
 
         return trustScores[smallerContributor][largerContributor];
+    }
+
+    function getReputationScore(
+        address contributor
+    ) public view returns (uint8) {
+        return reputationScore[contributor];
     }
 
     /* 
