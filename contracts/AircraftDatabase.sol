@@ -214,8 +214,8 @@ contract AircraftDatabase {
                     ) {
                         trustScores[smallerContributor][largerContributor].push(
                                 randomNumberInRange(
-                                    0,
-                                    50,
+                                    1,
+                                    20,
                                     (i + 1) * (j + 1) * (k + 1)
                                 )
                             );

@@ -32,10 +32,13 @@ for account_number, reputations in account_reputations.items():
 
 ax.set_xlabel("Epoch number")
 ax.set_ylabel("Reputation score")
-ax.legend(bbox_to_anchor=(0.5, 1.13), loc='upper center', borderaxespad=0., ncol = 5, fontsize = 10)
-ax.grid(alpha=0.5)
+ax.legend(bbox_to_anchor=(0.5, 1.1), loc='upper center', borderaxespad=0., ncol = 5, fontsize = 10)
+ax.grid(which="major", alpha=0.5)
 ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
 fig.set_size_inches(10,7)
+
+ax.yaxis.set_minor_locator(plt.MultipleLocator(5))
+ax.grid(which='minor', alpha=0.25)
 
 # Save the figure in EPS format
 plt.savefig(GRAPH_FILENAME, format="eps", bbox_inches='tight')

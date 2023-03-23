@@ -5,13 +5,14 @@ import json
 import numpy as np
 import time
 
+# Fixed to compare the algorithm variables
 TOTAL_ACCOUNTS = 5      # Max 10
-TOTAL_EPOCHS = 5       # Max 50
+TOTAL_EPOCHS = 15       # Max 50
 TOTAL_AIRCRAFT = 5      # Max 10
 
-# Algorithm variables
+# Algorithm variables (what we change)
 TOTAL_MALICIOUS_ACCOUNTS = 2
-ERRONEOUS_AIRCRAFT = 2
+ERRONEOUS_AIRCRAFT = 1
 REPUTATION_ALGORITHM = 0    # 0 - simple average; 1 - weighted average 
 
 TRUST_RESULT_FILE = "./reports/trust_scores.json"
