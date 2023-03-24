@@ -33,17 +33,13 @@ contract AircraftDatabase {
     mapping(address => bool) public addressContributed;
 
     // Reputation scores (0-100) for each contributor
-    mapping(address => uint8) public reputationScore;
+    mapping(address => uint) public reputationScore;
 
-    // Trust scores for each contributor for 1 epoch
-    struct ContributorTrustScores {
-        address[] interactedWithContributors;
-        mapping(address => bool) hasInteracted;
-        mapping(address => uint8[]) trustWithContributor;
-    }
+    // Malicious contributor
+    mapping(address => bool) isMaliciousContributor;
 
-    // Information on trust scores ofr a given contributor
-    mapping(address => ContributorTrustScores) private trustScores;
+    // Information on trust scores of a given contributor
+    mapping(address => mapping(address => uint8[])) private trustScores;
 
     // Check if the contributor submitted in current epoch
     mapping(address => bool) public contributorInCurrentEpoch;
@@ -72,6 +68,13 @@ contract AircraftDatabase {
 
     uint32 public currentEpoch;
 
+    // Configuration variables
+    uint8 private numberOfContributors;
+    uint8 private numberOfMaliciousContributors;
+    uint8 private erroenousAircraft;
+    uint8 private reputationAlgorithm;
+    bool private reputationFirstRun = true;
+
     // Function for adding aircraft data for a specific epoch
     function submitAircraftData(
         bytes3[] memory _icao24,
@@ -91,25 +94,21 @@ contract AircraftDatabase {
             listOfContributors.push(contributor);
         }
 
-        // Update the occurrences structure if it is for the same epoch
-        if (currentEpoch == 0 || currentEpoch == _epoch) {
-            // Update list of aircraft in current epoch
-            for (uint i = 0; i < _icao24.length; i++) {
-                if (!isAircraftInCurrentEpoch[_icao24[i]]) {
-                    isAircraftInCurrentEpoch[_icao24[i]] = true;
-                    aircraftListCurrentEpoch.push(_icao24[i]);
-                }
+        // Set the malicious contributor to the first one that sends data
+        if (
+            !isMaliciousContributor[contributor] &&
+            numberOfMaliciousContributors > 0
+        ) {
+            isMaliciousContributor[contributor] = true;
+            numberOfMaliciousContributors -= 1;
+        }
 
-                if (!contributorInCurrentEpoch[contributor]) {
-                    contributorInCurrentEpoch[contributor] = true;
-                    listOfContributorsInCurrentEpoch.push(contributor);
-                }
-            }
-        } else if (currentEpoch != _epoch) {
+        // Actions to take for a new epoch (but not the first call to the function)
+        if (currentEpoch != _epoch && currentEpoch != 0) {
             // The information is for a new epoch
 
             // 1st - Compute the state estimation for the aircraft
-            computeEstimates();
+            //computeEstimates();
 
             // 2nd - Compute trust scores
             computeTrustScores();
@@ -119,6 +118,20 @@ contract AircraftDatabase {
 
             // Delete the values of the variables from the previous epoch
             resetEpochVariables();
+        }
+
+        // Update list of aircraft in current epoch
+        for (uint i = 0; i < _icao24.length; i++) {
+            if (!isAircraftInCurrentEpoch[_icao24[i]]) {
+                isAircraftInCurrentEpoch[_icao24[i]] = true;
+                aircraftListCurrentEpoch.push(_icao24[i]);
+            }
+        }
+
+        // Add contributor to the list of contributos in current epoch
+        if (!contributorInCurrentEpoch[contributor]) {
+            contributorInCurrentEpoch[contributor] = true;
+            listOfContributorsInCurrentEpoch.push(contributor);
         }
 
         // Add values to the occurrence structure
@@ -166,10 +179,89 @@ contract AircraftDatabase {
         }
     }
 
-    function computeTrustScores() internal {}
+    function computeTrustScores() internal {
+        for (uint i = 0; i < listOfContributorsInCurrentEpoch.length; i++) {
+            address contributor1 = listOfContributorsInCurrentEpoch[i];
+            for (
+                uint j = i + 1;
+                j < listOfContributorsInCurrentEpoch.length;
+                j++
+            ) {
+                address contributor2 = listOfContributorsInCurrentEpoch[j];
+
+                // Determine the order of the contributor addresses
+                address smallerContributor = contributor1 < contributor2
+                    ? contributor1
+                    : contributor2;
+                address largerContributor = contributor1 < contributor2
+                    ? contributor2
+                    : contributor1;
+
+                // Clear previous epoch trust scores
+                delete trustScores[smallerContributor][largerContributor];
+
+                uint8 erroenousAircraftAvailable = erroenousAircraft;
+
+                for (uint k = 0; k < aircraftListCurrentEpoch.length; k++) {
+                    // If both contributors are malicious or good, they will have
+                    // a high trust value between them. Only if one is malicious
+                    // and the other one not will they have a lower trust value.abi
+                    // Lower trust values are assigned for the total of erroneous data
+                    if (
+                        (isMaliciousContributor[smallerContributor] !=
+                            isMaliciousContributor[largerContributor]) &&
+                        erroenousAircraftAvailable > 0
+                    ) {
+                        trustScores[smallerContributor][largerContributor].push(
+                                randomNumberInRange(
+                                    1,
+                                    20,
+                                    (i + 1) * (j + 1) * (k + 1)
+                                )
+                            );
+                        erroenousAircraftAvailable -= 1;
+                    } else {
+                        trustScores[smallerContributor][largerContributor].push(
+                                randomNumberInRange(
+                                    80,
+                                    100,
+                                    (i + 1) * (j + 1) * (k + 1)
+                                )
+                            );
+                    }
+                }
+            }
+        }
+    }
 
     function computeReputationScores() internal {
-        Reputation.computeReputationScores();
+        uint numOfContributorsEpoch = listOfContributorsInCurrentEpoch.length;
+        uint[] memory currentReputationScores = new uint[](
+            numOfContributorsEpoch
+        );
+
+        for (uint i = 0; i < numOfContributorsEpoch; i++) {
+            address contributor = listOfContributorsInCurrentEpoch[i];
+            currentReputationScores[i] = reputationScore[contributor];
+            // If it is the first time being called, initialize all reputation
+            // scores to 100 / N, where N = number of contributors
+            if (reputationFirstRun)
+                currentReputationScores[i] += 100 / numOfContributorsEpoch;
+        }
+        reputationFirstRun = false;
+
+        uint[] memory updatedReputationScores = Reputation
+            .computeReputationScores(
+                trustScores,
+                listOfContributorsInCurrentEpoch,
+                currentReputationScores,
+                reputationAlgorithm
+            );
+
+        for (uint i = 0; i < numOfContributorsEpoch; i++) {
+            address contributor = listOfContributorsInCurrentEpoch[i];
+            reputationScore[contributor] = updatedReputationScores[i];
+        }
     }
 
     function resetEpochVariables() private {
@@ -188,16 +280,31 @@ contract AircraftDatabase {
             delete contributorInCurrentEpoch[
                 listOfContributorsInCurrentEpoch[i]
             ];
-
-            delete trustScores[listOfContributorsInCurrentEpoch[i]];
         }
 
         delete listOfContributorsInCurrentEpoch;
     }
 
+    // Contract setter function
+    function setParameters(
+        uint8 _numberOfContributors,
+        uint8 _numberOfMaliciousContributors,
+        uint8 _erroneousAircraft,
+        uint8 _reputationAlgorithm
+    ) public {
+        numberOfContributors = _numberOfContributors;
+        numberOfMaliciousContributors = _numberOfMaliciousContributors;
+        erroenousAircraft = _erroneousAircraft;
+        reputationAlgorithm = _reputationAlgorithm;
+    }
+
     /* 
-        VIEW functions (get data)
+        Contract getter functions
     */
+    function getCurrentEpoch() public view returns (uint32) {
+        return currentEpoch;
+    }
+
     function getAircraftList() public view returns (bytes3[] memory) {
         return aircraftList;
     }
@@ -210,5 +317,50 @@ contract AircraftDatabase {
         bytes3 _aicraftId
     ) public view returns (AircraftStateVector memory) {
         return aircraftInfo[_aicraftId];
+    }
+
+    function getTrustScores(
+        address contributor1,
+        address contributor2
+    ) public view returns (uint8[] memory) {
+        require(contributor1 != contributor2, "Contributors must be different");
+
+        address smallerContributor = contributor1 < contributor2
+            ? contributor1
+            : contributor2;
+        address largerContributor = contributor1 < contributor2
+            ? contributor2
+            : contributor1;
+
+        return trustScores[smallerContributor][largerContributor];
+    }
+
+    function getReputationScore(
+        address contributor
+    ) public view returns (uint) {
+        return reputationScore[contributor];
+    }
+
+    /* 
+    Helper functions
+    */
+    // Helper function to generate random number in a given range
+    function randomNumberInRange(
+        uint8 min,
+        uint8 max,
+        uint randNonce
+    ) private view returns (uint8) {
+        uint8 randomNum = uint8(
+            (uint256(
+                keccak256(
+                    abi.encodePacked(
+                        block.timestamp,
+                        block.difficulty,
+                        randNonce
+                    )
+                )
+            ) % (max - min + 1)) + min
+        );
+        return randomNum;
     }
 }

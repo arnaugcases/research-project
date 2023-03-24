@@ -5,9 +5,18 @@ import json
 import numpy as np
 import time
 
-TOTAL_ACCOUNTS = 5
-TOTAL_EPOCHS = 5
-TOTAL_AIRCRAFT = 5
+# Fixed to compare the algorithm variables
+TOTAL_ACCOUNTS = 5      # Max 10
+TOTAL_EPOCHS = 15       # Max 50
+TOTAL_AIRCRAFT = 5      # Max 10
+
+# Algorithm variables (what we change)
+TOTAL_MALICIOUS_ACCOUNTS = 3
+ERRONEOUS_AIRCRAFT = 2
+REPUTATION_ALGORITHM = 0    # 0 - simple average; 1 - weighted average 
+
+TRUST_RESULT_FILE = "./reports/trust_scores.json"
+REPUTATION_RESULT_FILE = "./reports/reputation_scores.json"
 
 def extract_aircraft_data():
     file_name = "./scripts/reduced_aircraft_data.json"
@@ -18,7 +27,7 @@ def extract_aircraft_data():
     return data
 
 
-def submit_data(data):
+def setup_configuration():
     # Deploy contract
     account = get_account(0)
     if network.show_active() == "development":
@@ -27,13 +36,38 @@ def submit_data(data):
     else:
         aircraft_details = AircraftDatabase[-1]
 
+    # Set configuration parameters
+    aircraft_details.setParameters(
+        TOTAL_ACCOUNTS, 
+        TOTAL_MALICIOUS_ACCOUNTS, 
+        ERRONEOUS_AIRCRAFT, 
+        REPUTATION_ALGORITHM)
+
+    # Open the trust file as write to erase previous contents
+    with open(TRUST_RESULT_FILE, "w") as f:
+        pass
+
+    # Open the reputation file as write to erase previous contents
+    with open(REPUTATION_RESULT_FILE, "w") as f:
+        pass
+
+    return aircraft_details
+
+
+def submit_data(data, aircraft_details):
+    # List to store all dictionaries
+    trust_scores_data = []
+    reputation_scores_data = []
+
     # Submit data for each account
     # 1st - Select 1 epoch
-    epoch_count = 0
-    for epoch in data:
-        if epoch_count >= TOTAL_EPOCHS: break
-        else: epoch_count += 1
-        print(f"Epoch {epoch_count}")
+    for epoch_index, epoch in enumerate(data):
+        if epoch_index >= TOTAL_EPOCHS: break
+        
+        # Print the epoch information 
+        print("#######################")
+        print(f"\tEpoch {epoch_index}")
+        print("#######################")
         epoch_time = epoch["time"]
 
         # 3rd - Submit the aircraft states per account
@@ -67,30 +101,67 @@ def submit_data(data):
             transaction = aircraft_details.submitAircraftData(
                 icao24, epoch_time, longitude, latitude, geo_altitude, on_ground, velocity, true_track, vertical_rate, {"from": account}
             )
-        
-        # Print the results of the smart contract
-        aircraft_to_evaluate = epoch["states"][0]
 
-        # During the first run the values will be 0 because the epoch won't have changed yet
-        print("Smart contract values of the aircraft: ")
-        print(aircraft_details.getAircraftState(aircraft_to_evaluate["icao24"]))
+        # Store trust scores before starting the new epoch
+        if epoch_index > 0:
+            store_trust_scores(aircraft_details, epoch_index, trust_scores_data)
+            store_reputation_data(aircraft_details, epoch_index, reputation_scores_data)
 
+    # Submit dummy data for an extra iteration to compute trust and reputation for the last epoch
+    account = get_account(0)
+    dummy_icao24 = ["000000"]
+    dummy_epoch_time = 0
+    dummy_values = [0] * len(dummy_icao24)
+    aircraft_details.submitAircraftData(
+        dummy_icao24, dummy_epoch_time, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, dummy_values, {"from": account}
+    )
+    store_trust_scores(aircraft_details, epoch_index, trust_scores_data)
+    store_reputation_data(aircraft_details, epoch_index, reputation_scores_data)
 
     # Wait 1 second before finishing to avoid any errors  
     transaction.wait(1)
 
-    # Return contract
-    return aircraft_details
+    # Write trust score values result to file
+    with open(TRUST_RESULT_FILE, "a") as f:
+        json.dump(trust_scores_data, f, indent=4)
+
+    with open(REPUTATION_RESULT_FILE, "a") as f:
+        json.dump(reputation_scores_data, f, indent=4)
 
 
-def read_parameters(aircraft_details):
-    # Get list of contributors
+def store_trust_scores(aircraft_details, epoch_index, trust_scores_data):
     contributors = aircraft_details.getContributorList()
-    print(f"List of contributors:\n {contributors}")
+    epoch_trust_scores = {
+        "epoch": epoch_index,
+        "trust_scores": []
+    }
 
-    # Get list of aircraft
-    aircraft_list = aircraft_details.getAircraftList()
-    print(f"Aircraft list:\n {aircraft_list}")
+    for i in range(len(contributors)):
+        for j in range(i + 1, len(contributors)):
+            trust_scores = aircraft_details.getTrustScores(contributors[i], contributors[j])
+            epoch_trust_scores["trust_scores"].append({
+                "pair": (f"Contributor {i+1}", f"Contributor {j+1}"),
+                "trust_scores": trust_scores
+            })
+
+    trust_scores_data.append(epoch_trust_scores)  
+
+
+def store_reputation_data(aircraft_details, epoch_index, reputation_scores_data):
+    contributors = aircraft_details.getContributorList()
+    epoch_reputation_scores = {
+        "epoch": epoch_index,
+        "reputation_scores": []
+    }
+
+    for i in range(len(contributors)):
+        epoch_reputation_scores["reputation_scores"].append({
+            "Account number": i+1,
+            "Address": contributors[i],
+            "Reputation": aircraft_details.getReputationScore(contributors[i])
+        })
+
+    reputation_scores_data.append(epoch_reputation_scores)
 
 
 def main():
@@ -99,11 +170,9 @@ def main():
 
     start_time = time.time()
     # Submit to the smart contract
-    aircraft_details = submit_data(data)
+    aircraft_details = setup_configuration()
+    submit_data(data, aircraft_details)
     end_time = time.time()
     total_time = end_time - start_time
 
     print(f"Total execution time: {total_time} seconds")
-
-    # Extract information from the smart contract
-    read_parameters(aircraft_details)
