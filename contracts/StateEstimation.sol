@@ -33,6 +33,7 @@ library StateEstimation {
         int24 sumLatitude;
         int24 sumVelocity;
         int24 sumTrueTrack;
+
         for (uint24 i = 0; i < N; i++) {
             sumLongitude += observations[i].longitude;
             sumLatitude += observations[i].latitude;
@@ -60,6 +61,7 @@ library StateEstimation {
         AircraftDatabase.AircraftStateVector memory trueValue,
         int errorAllowed
     ) public pure returns (int[] memory) {
+
         uint N = observations.length;
 
         Error[] memory abs_error = new Error[](N);
@@ -68,14 +70,17 @@ library StateEstimation {
                 trueValue.longitude)
                 ? observations[i].longitude - trueValue.longitude
                 : trueValue.longitude - observations[i].longitude;
+
             abs_error[i].latitude = (observations[i].latitude >
                 trueValue.latitude)
                 ? observations[i].latitude - trueValue.latitude
                 : trueValue.latitude - observations[i].latitude;
+
             abs_error[i].velocity = (observations[i].velocity >
                 trueValue.velocity)
                 ? observations[i].velocity - trueValue.velocity
                 : trueValue.velocity - observations[i].velocity;
+
             abs_error[i].trueTrack = (observations[i].trueTrack >
                 trueValue.trueTrack)
                 ? observations[i].trueTrack - trueValue.trueTrack
@@ -177,6 +182,7 @@ library StateEstimation {
         uint32 currentEpoch,
         AircraftDatabase.AircraftStateVector memory previous_val
     ) public pure returns (AircraftDatabase.AircraftStateVector memory) {
+
         AircraftDatabase.AircraftStateVector
             memory obs_val_current = computeEstimates(
                 observations,
@@ -199,8 +205,9 @@ library StateEstimation {
             return trueValue;
         }
 
-        int24[] memory prediction = position_prediction(delta_t, previous_val); //[0] - longitude, [1] - latitude
-        /*
+        int24[] memory prediction = position_prediction_improved(delta_t, previous_val); //[0] - longitude, [1] - latitude
+
+    /*
 	Calculating prediction validity:
 	Assuming planes fly in straight lines (strong assumption I know), the velocity 
 	and trueTrack should be the same in obs1 and obs2 - or at least close to
@@ -208,7 +215,8 @@ library StateEstimation {
 	values of obs 2 (more recent) as 'true' values, the difference 
 	between these values and those in in obs1 (older) determined the accuracy/
 	validity of the prediction components. 
-*/
+    */
+
         int24 velocity_offset = previous_val.velocity > obs_val_current.velocity
             ? ((previous_val.velocity - obs_val_current.velocity) * 1000) /
                 previous_val.velocity
@@ -225,14 +233,14 @@ library StateEstimation {
         int gain = 2000 - int(track_offset) - int(velocity_offset);
 
         trueValue.longitude = int24(
-            (2000 *
+            (1000 *
                 int(obs_val_current.longitude) +
                 int(prediction[0]) *
-                gain) / (2000 + gain)
+                gain) / (1000 + gain)
         );
         trueValue.latitude = int24(
-            (2000 * int(obs_val_current.latitude) + int(prediction[1] * gain)) /
-                (2000 + gain)
+            (1000 * int(obs_val_current.latitude) + int(prediction[1] * gain)) /
+                (1000 + gain)
         );
 
    return trueValue;
@@ -245,78 +253,59 @@ library StateEstimation {
         int24 _delta_time,
         AircraftDatabase.AircraftStateVector memory previous_estimate
     ) pure internal returns (int24[] memory) {
-        int24  Re = 6371; //km
-        
-        int24[] memory data = new int24[](2);
 
-        //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
 
-        //trigonometry factor *100, scale factor *10. Pi*1000 -> resulting angle in deg*10000
-        //trueTrack angle needs to be converted from deg*100 to an int between 0-16384, where 16384 means 360 deg
-        //Altitude converted to km, velocity from ms-1 * 100 to kms-1 *1/100
-        // pi*10000 = 31415
-        //result is in deg*10000, in agreement with longitude and latitude inputs
+    int24  Re = 6371; //km
+    int24  pi = 31415; //km
 
-        int24 delta_long = int24(
-            ((int(
-                (((Trigonometry.sin(
-                    uint16(
-                        int16(
-                            int((previous_estimate.trueTrack * 16384) / 36000)
-                        )
-                    )
-                ) / 328) *
-                    previous_estimate.velocity *
-                    _delta_time) / 10000) *
-                    ((Re * 10) /
-                        (Re + int24(previous_estimate.geoAltitude) / 100000))
-            ) * 10000) / (2 * int(Re) * 31415)) * 360
-        );
-        int24 delta_lat = int24(
-            ((int(
-                (((Trigonometry.cos(
-                    uint16(
-                        int16(
-                            int((previous_estimate.trueTrack * 16384) / 36000)
-                        )
-                    )
-                ) / 328) *
-                    previous_estimate.velocity *
-                    _delta_time) / 10000) *
-                    ((Re * 10) /
-                        (Re + int24(previous_estimate.geoAltitude) / 100000))
-            ) * 10000) / (2 * int(Re) * 31415)) * 360
-        );
+    int24[] memory data = new int24[](4);
 
-        data[0] = previous_estimate.longitude + delta_long; //assumes angle in deg*10000
-        data[1] = previous_estimate.latitude + delta_lat;
+    //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
+
+    //sin*100, velocity *100, scale *100
+    data[2] = int24(
+        int(
+            Trigonometry.sin(uint16(int16(int(previous_estimate.trueTrack)*16384/360/100))))
+            /328*previous_estimate.velocity*_delta_time/1000
+            *(Re*100/(Re+int24(previous_estimate.geoAltitude)/100000))
+            *100/(2*int(Re)*int(pi))*360);
+    data[3] = int24(
+        int(
+            Trigonometry.sin(uint16(int16(int(90*100-previous_estimate.trueTrack)*16384/360/100))))
+            /328*previous_estimate.velocity*_delta_time/1000
+            *(Re*100/(Re+int24(previous_estimate.geoAltitude)/100000))
+            *100/(2*int(Re)*int(pi))*360);
+	data[0] = previous_estimate.longitude+data[2]; //assumes angle in deg*10000.  longitude
+    data[1] = previous_estimate.latitude+data[3]; //latitude
+
 
     return data;
 }
 
-function position_prediction_improved(int24 _delta_time, AircraftDatabase.AircraftStateVector memory previous_estimate) pure internal returns(int24[] memory){
-    int24  Re = 6371; //km
-    int24  pi = 31415; //pi*10000
-    
-    int24 d = _delta_time*previous_estimate.velocity/100000; //km
+function position_prediction_improved(
+    int24 _delta_time,
+    AircraftDatabase.AircraftStateVector memory previous_estimate)
+    pure internal returns(int24[] memory) {
 
-    int24[] memory data = new int24[](3);
+    int24  Re = 6371; //km
+
+    int  pi = 31415; //pi*10000
+    
+    int d = int(_delta_time)*int(previous_estimate.velocity)/100000; //km
+
+    int24[] memory data = new int24[](4);
 
     if (previous_estimate.longitude<0){
         previous_estimate.longitude += 360*10000;
     }
-        if (previous_estimate.latitude<0){
+
+    if (previous_estimate.latitude<0){
         previous_estimate.latitude += 360*10000;
     }
 
     //altitude assumed in metres, velocity ms-1, delta_t seconds, result - delta_hor - is in km*1000
-    //trigonometry factor *100, scale factor *10. Pi*1000 -> resulting angle in deg*10000
-/*
-    int24  delta_long = int24(int(Trigonometry.sin(uint16(int16(previous_estimate.trueTrack)))/328*previous_estimate.velocity*_delta_time/1000
-    *(Re*10/(Re+int24(previous_estimate.geoAltitude)/1000)))*10000/(2*int(Re)*3142)*360);
-	int24  delta_lat = int24(int(Trigonometry.cos(uint16(int16(previous_estimate.trueTrack)))/328*previous_estimate.velocity*_delta_time/1000*
-    (Re*10/(Re+int24(previous_estimate.geoAltitude)/1000)))*10000/(2*int(Re)*3142)*360);
-	*///assumes angle in deg*10000
+    //trigonometry factor *100, scale factor *10. Pi*10000 -> resulting angle in deg*10000
+    //assumes angle in deg*10000
 
     int sin_lat1 = int(Trigonometry.sin(uint16(int16(int(previous_estimate.latitude)*16384/360/10000))))*10000/32767; //range +-10000
 
@@ -328,23 +317,31 @@ function position_prediction_improved(int24 _delta_time, AircraftDatabase.Aircra
 
     int cos_track = int(Trigonometry.sin(uint16(int16(int(90*100-previous_estimate.trueTrack)*16384/360/100))))*10000/32767; //range +-10000
 
-    data[1] = int24(asin(((sin_lat1*1000*10000+cos_lat1*DoverR*cos_track)/10000000))*1800000/int(pi)); //deg*10000 latitude
+    data[1] = int24(asin(((sin_lat1*1000*10000+cos_lat1*DoverR*cos_track)/10000000))*1800000/pi); //deg*10000 latitude
 
     data[2] = (data[1] < 0) ? data[1] + 360*10000 : data[1];   // need a latitude angle in the range 0-360 deg
 
-    data[0] = previous_estimate.longitude + int24(atan(sin_track*DoverR*cos_lat1*10/(1*10000*10000-sin_lat1
-    *int(Trigonometry.sin(uint16(int16(int(data[1])*16384/360/10000))))*10000/32767))*1800000/int(pi));   //longitude in deg*10000
+    data[3] = previous_estimate.longitude + int24(atan(sin_track*DoverR*cos_lat1*10/(1*10000*10000-sin_lat1
+    *int(Trigonometry.sin(uint16(int16(int(data[1])*16384/360/10000))))*10000/32767))*1800000/pi);   //longitude in deg*10000
+   
+    data[0] = (data[3] > 1800000) ? data[3] - 360*10000 : data[3];  //longitude range [-180, 180]
+    
     return data;
 }
 
-function asin(int256 x) public pure returns (int256) {   // input range +-10000, returns angle in radians*10000
+function asin(int256 x)
+public pure returns (int256) { 
+    // input range +-10000, returns angle in radians*10000
     int divider = 10000;
+
     return x+x**3/6/divider**2+x**5*3/40/divider**4+15*x**7/(336*divider**6);
 }
-function atan(int256 x) public pure returns (int256) {   // input range +-10000, returns angle in radians*10000
+function atan(int256 x)
+public pure returns (int256) {
+    // input range +-10000, returns angle in radians*10000
     int divider = 10000;
+
     return x - x**3/3/divider**2+x**5/5/divider**4-x**7/7/divider**6;
 }
-
 
 }
