@@ -329,13 +329,11 @@ function position_prediction_improved(
     return data;
 }
 
-function asin(int256 x)
-public pure returns (int256) { 
-    // input range +-10000, returns angle in radians*10000
+function asin(int256 x) public pure returns (int256) {   // input range +-10000, returns angle in radians*10000
     int divider = 10000;
-
-    return x+x**3/6/divider**2+x**5*3/40/divider**4+15*x**7/(336*divider**6);
+    return x+x**3/6/divider**2+x**5*3/40/divider**4+15*x**7/(336*divider**6)+105*x**9/(3456*divider**8)+945*x**11/(42240*divider**10)+x**13*10395/(599040*divider**12);
 }
+
 function atan(int256 x)
 public pure returns (int256) {
     // input range +-10000, returns angle in radians*10000
