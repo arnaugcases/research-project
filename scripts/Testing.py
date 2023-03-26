@@ -5,6 +5,7 @@ import numpy as np
 import random
 
 TRUST_RESULT_FILE = "./reports/trust_scores.json"
+GRAPH_FILENAME = "./reports/figures/reputation_scores_eigen.eps"
 REPUTATION_ALGORITHM = 2
 
 # Load the JSON file
@@ -15,7 +16,7 @@ with open(TRUST_RESULT_FILE, "r") as f:
 epochs = []
 
 contributors = 5 # Looking directly at the file
-contributor_reputations = {i: [int(100/5)] for i in range(1, contributors+1)}
+contributor_reputations = {i: [int(100/contributors)] for i in range(1, contributors+1)}
 trust_values = {}
 
 ############################################
@@ -57,7 +58,7 @@ def weighted_average(i, previous_reputation):
     return int(weighted_sum(previous_reputation, weighted_average_trust))
 
 
-def eigen_trust(previous_reputation):
+def eigen_trust(previous_reputation, p):
     # Create the trust matrix
     n = contributors
     trust_matrix = np.zeros((n, n))
@@ -75,15 +76,16 @@ def eigen_trust(previous_reputation):
         for j in range(0, len(trust_matrix)):
             trust_matrix[i,j] /= row_sum
 
+    trust_matrix_transpose = trust_matrix.transpose()
 
     # Initialize the trust vector
-    trust_vector = np.ones(n) / n
+    #trust_vector = np.ones(n) / n
     trust_vector = previous_reputation
 
     # Iterate until convergence
-    alpha = 0.5 # Damping factor
-    for i in range(1000):
-        new_trust_vector = alpha * np.dot(trust_matrix.transpose(), trust_vector) + (1 - alpha) / n
+    alpha = 0.05
+    for i in range(10000):
+        new_trust_vector = (1-alpha) * np.dot(trust_matrix_transpose, trust_vector) + alpha * p
         
         trust_vector = new_trust_vector
 
@@ -91,7 +93,7 @@ def eigen_trust(previous_reputation):
 
 
 def weighted_sum(x, y):
-    return (1/x * x + 1/y * y) / (1/x + 1/y)
+    return (2) / (1/x + 1/y)
 
 
 def weighted_sum2(new_trust, previous_trust):
@@ -105,6 +107,10 @@ def weighted_sum2(new_trust, previous_trust):
 
 # Initialize reputation for eigentrust
 previous_reputation = np.ones(contributors)/contributors
+
+p = np.zeros(contributors)
+p[-1] = 1 # pre-trusted peers
+previous_reputation = p
 
 if REPUTATION_ALGORITHM == 2:
     for i in range(1, contributors+1):
@@ -130,7 +136,7 @@ for record in data:
                 
             contributor_reputations[i].append(reputation)
     elif REPUTATION_ALGORITHM == 2:
-        previous_reputation = eigen_trust(previous_reputation)
+        previous_reputation = eigen_trust(previous_reputation, p)
 
         for index, x in enumerate(previous_reputation):
             contributor_reputations[index+1].append(weighted_sum2(x, contributor_reputations[index+1][-1]))
@@ -147,8 +153,15 @@ ax.grid(which="major", alpha=0.5)
 ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
 fig.set_size_inches(10,7)
 
+if REPUTATION_ALGORITHM == 2:
+    expected_value = 1/contributors
+    ax.set_ylim([expected_value-0.1, expected_value+0.1])
+
 ax.yaxis.set_minor_locator(plt.MultipleLocator(5))
 ax.grid(which='minor', alpha=0.25)
+
+# Save the figure in EPS format
+plt.savefig(GRAPH_FILENAME, format="eps", bbox_inches='tight')
 
 # Show the plot
 plt.show()
