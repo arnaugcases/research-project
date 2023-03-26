@@ -12,7 +12,7 @@ TOTAL_AIRCRAFT = 5      # Max 10
 
 # Algorithm variables (what we change)
 TOTAL_MALICIOUS_ACCOUNTS = 3
-ERRONEOUS_AIRCRAFT = 2
+ERRONEOUS_AIRCRAFT = 1  
 REPUTATION_ALGORITHM = 0    # 0 - simple average; 1 - weighted average 
 
 TRUST_RESULT_FILE = "./reports/trust_scores.json"
